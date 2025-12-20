@@ -1,0 +1,98 @@
+{
+  "id": "es-en",
+  "name": "Spanish - English",
+  "sourceLang": "Spanish",
+  "targetLang": "English",
+  "cards": [
+    {
+        "id": 1,
+        "word": "el, la",
+        "type": "art",
+        "translation": "the",
+        "example": "esa mujer era la mujer que yo quería ser",
+        "range_count": 100,
+        "frequency": 2037803
+    },
+    {
+        "id": 2,
+        "word": "de",
+        "type": "prep",
+        "translation": "of, from",
+        "example": "el hijo de un hermano mío",
+        "range_count": 100,
+        "frequency": 1319834
+    },
+    {
+        "id": 3,
+        "word": "que",
+        "type": "conj",
+        "translation": "that, which",
+        "example": "dice que no",
+        "range_count": 100,
+        "frequency": 662653
+    },
+    {
+        "id": 4,
+        "word": "y",
+        "type": "conj",
+        "translation": "and",
+        "example": "él y ella sabían leer y escribir",
+        "range_count": 100,
+        "frequency": 562162
+    },
+    {
+        "id": 5,
+        "word": "a",
+        "type": "prep",
+        "translation": "to, at",
+        "example": "se fue a la cama",
+        "range_count": 100,
+        "frequency": 529899
+    },
+    {
+        "id": 6,
+        "word": "en",
+        "type": "prep",
+        "translation": "in, on",
+        "example": "no está en la casa",
+        "range_count": 100,
+        "frequency": 507233
+    },
+    {
+        "id": 7,
+        "word": "un",
+        "type": "art",
+        "translation": "a, an",
+        "example": "era un hombre simpático",
+        "range_count": 100,
+        "frequency": 434022
+    },
+    {
+        "id": 8,
+        "word": "ser",
+        "type": "v",
+        "translation": "to be",
+        "example": "es nuevo, es bueno",
+        "range_count": 100,
+        "frequency": 374194
+    },
+    {
+        "id": 9,
+        "word": "se",
+        "type": "pron",
+        "translation": "[“reflexive” marker]",
+        "example": "la abuela se acostó tranquila",
+        "range_count": 100,
+        "frequency": 329012
+    },
+    {
+        "id": 10,
+        "word": "no",
+        "type": "adv",
+        "translation": "no",
+        "example": "no hay modo de negar nada",
+        "range_count": 100,
+        "frequency": 257365
+    }
+  ]
+}

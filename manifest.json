@@ -1,0 +1,21 @@
+{
+  "name": "Language Flash Cards",
+  "short_name": "FlashCards",
+  "description": "A PWA for learning foreign language vocabulary",
+  "start_url": "/flashcard-pwa/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4a90e2",
+  "icons": [
+    {
+      "src": "images/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "images/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

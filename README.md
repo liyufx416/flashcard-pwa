@@ -1,0 +1,186 @@
+# Flashcard PWA
+
+A Progressive Web Application for learning vocabulary through flashcards with spaced repetition and difficulty tracking.
+
+## Features
+
+- **Multi-language Support**: Study Spanish-English and German-English word pairs
+- **Difficulty Tracking**: Mark cards as Easy, Medium, or Hard to prioritize your learning
+- **Smart Filtering**: Filter cards by difficulty level (New, Easy, Medium, Hard)
+- **Reverse Direction**: Toggle between source→target and target→source language practice
+- **Card Management**: Add, edit, and delete flashcards
+- **Persistent Progress**: Your preferences and card difficulties are saved locally
+- **Responsive Design**: Works seamlessly on desktop and mobile devices
+- **Offline Support**: PWA capabilities allow offline usage
+
+## Tech Stack
+
+### Frontend
+- **HTML5**: Semantic markup and structure
+- **CSS3**: Modern styling with CSS variables, Flexbox, and sticky positioning
+- **Vanilla JavaScript (ES6+)**: No frameworks - pure JavaScript with classes and modules
+
+### PWA Features
+- **Service Worker**: Offline caching and app-like experience
+- **Web App Manifest**: Installable on mobile and desktop
+- **LocalStorage**: Client-side data persistence for user preferences and progress
+
+### Data Format
+- **JSON**: Card data and metadata stored in JSON files
+
+## Project Structure
+
+```
+flashcard-pwa/
+├── index.html              # Main HTML entry point
+├── manifest.json           # PWA manifest configuration
+├── sw.js                   # Service worker for offline support
+├── README.md              # This file
+│
+├── css/
+│   └── style.css          # All application styles
+│
+├── js/
+│   ├── app.js             # Main application controller
+│   ├── screens/
+│   │   ├── welcomeScreen.js      # Welcome/home screen with language selection
+│   │   ├── studyScreen.js        # Flashcard study interface
+│   │   └── manageCardsScreen.js  # Card management (CRUD operations)
+│   └── utils/
+│       └── storage.js     # LocalStorage utilities
+│
+├── data/
+│   ├── metadata.json      # Language pair definitions
+│   ├── es-en.json         # Spanish-English vocabulary (25 cards)
+│   └── de-en.json         # German-English vocabulary (5 cards)
+│
+└── images/
+    └── icons/             # App icons for PWA
+
+```
+
+## Data Structure
+
+### Language Pair Metadata (`data/metadata.json`)
+```json
+{
+  "languagePairs": [
+    {
+      "id": "es-en",
+      "name": "Spanish - English",
+      "sourceLang": "Spanish",
+      "targetLang": "English"
+    }
+  ]
+}
+```
+
+### Card Data (`data/es-en.json`, `data/de-en.json`)
+```json
+{
+  "cards": [
+    {
+      "id": "1",
+      "front": "hola",
+      "back": "hello",
+      "example": "Hola, ¿cómo estás?"
+    }
+  ]
+}
+```
+
+## LocalStorage Schema
+
+The app uses LocalStorage to persist user preferences and progress:
+
+- `selectedLanguagePair`: Currently selected language pair ID (e.g., "es-en")
+- `reverseDirection`: Boolean for language direction toggle
+- `difficultyFilters`: Object with difficulty filter states
+  ```json
+  {
+    "new": true,
+    "easy": false,
+    "medium": false,
+    "hard": true
+  }
+  ```
+- `flashcard-{pairId}-{cardId}`: Individual card difficulty (1=Easy, 2=Medium, 3=Hard)
+
+## Screen Flow
+
+1. **Welcome Screen**
+   - Select language pair
+   - Toggle reverse direction
+   - Filter by difficulty levels
+   - View card counts per difficulty
+   - Navigate to Study or Manage Cards
+
+2. **Study Screen**
+   - View flashcards one at a time
+   - Flip cards to see translation
+   - Mark difficulty (Easy/Medium/Hard)
+   - Navigate through filtered cards
+   - Return to Welcome screen
+
+3. **Manage Cards Screen**
+   - View all cards in table format
+   - Add new cards
+   - Edit existing cards
+   - Delete cards
+   - Scrollable card list with fixed header
+
+## Getting Started
+
+### Prerequisites
+- A modern web browser (Chrome, Firefox, Safari, Edge)
+- A local web server (for development)
+
+### Installation
+
+1. Clone or download the project
+2. Serve the `flashcard-pwa` directory using a local web server:
+   ```bash
+   # Using Python 3
+   python -m http.server 8080
+   
+   # Using Node.js http-server
+   npx http-server -p 8080
+   
+   # Using PHP
+   php -S localhost:8080
+   ```
+3. Open `http://localhost:8080` in your browser
+4. (Optional) Install as PWA using browser's "Install App" option
+
+### Adding New Language Pairs
+
+1. Create a new JSON file in `data/` (e.g., `fr-en.json`)
+2. Add card data following the existing schema
+3. Update `data/metadata.json` to include the new language pair
+4. Restart the app
+
+### Adding Cards to Existing Language Pairs
+
+1. Edit the corresponding JSON file in `data/` (e.g., `data/es-en.json`)
+2. Add new card objects with unique IDs
+3. Refresh the app
+
+## Browser Support
+
+- Chrome/Edge (latest)
+- Firefox (latest)
+- Safari (latest)
+- Mobile browsers (iOS Safari, Chrome Mobile)
+
+## Future Enhancements
+
+- Spaced repetition algorithm
+- Statistics and progress tracking
+- Audio pronunciation
+- Image support for cards
+- Export/import card decks
+- Cloud sync
+
+## License
+
+This project is open source and available for educational purposes.

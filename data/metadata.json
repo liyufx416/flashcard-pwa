@@ -1,0 +1,16 @@
+{
+  "languagePairs": [
+    {
+      "id": "es-en",
+      "name": "Spanish - English",
+      "sourceLang": "Spanish",
+      "targetLang": "English"
+    },
+    {
+      "id": "de-en",
+      "name": "German - English",
+      "sourceLang": "German",
+      "targetLang": "English"
+    }
+  ]
+}

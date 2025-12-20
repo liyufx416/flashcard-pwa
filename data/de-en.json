@@ -1,0 +1,53 @@
+{
+  "id": "de-en",
+  "name": "German - English",
+  "sourceLang": "German",
+  "targetLang": "English",
+  "cards": [
+    {
+      "id": "1",
+      "word": "Hallo",
+      "type": "interj",
+      "translation": "Hello",
+      "example": "Hallo, wie geht's? - Hello, how are you?",
+      "range_count": null,
+      "frequency": null
+    },
+    {
+      "id": "2",
+      "word": "Danke",
+      "type": "interj",
+      "translation": "Thank you",
+      "example": "Vielen Dank für deine Hilfe. - Thank you very much for your help.",
+      "range_count": null,
+      "frequency": null
+    },
+    {
+      "id": "3",
+      "word": "Bitte",
+      "type": "adv",
+      "translation": "Please / You're welcome",
+      "example": "Ein Kaffee, bitte. - A coffee, please.",
+      "range_count": null,
+      "frequency": null
+    },
+    {
+      "id": "4",
+      "word": "Guten Morgen",
+      "type": "phrase",
+      "translation": "Good morning",
+      "example": "Guten Morgen! Hast du gut geschlafen? - Good morning! Did you sleep well?",
+      "range_count": null,
+      "frequency": null
+    },
+    {
+      "id": "5",
+      "word": "Auf Wiedersehen",
+      "type": "phrase",
+      "translation": "Goodbye",
+      "example": "Ich muss jetzt gehen, auf Wiedersehen! - I have to go now, goodbye!",
+      "range_count": null,
+      "frequency": null
+    }
+  ]
+}
