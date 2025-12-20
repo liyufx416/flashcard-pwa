@@ -692,6 +692,56 @@ input:checked + .toggle-slider:before {
   color: #ef4444;
 }
 
+/* Speaker button styles */
+.text-with-speaker {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.speaker-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  border: none;
+  background: transparent;
+  color: var(--primary-color);
+  cursor: pointer;
+  transition: var(--transition);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.speaker-btn:hover {
+  background: var(--secondary-color);
+  color: var(--primary-dark);
+}
+
+.speaker-btn:active {
+  transform: scale(0.95);
+}
+
+.speaker-btn svg {
+  display: block;
+}
+
+.speaker-btn-small {
+  padding: 0.35rem;
+}
+
+.example-container {
+  margin-top: 1rem;
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+.example-container .example {
+  flex: 1;
+  margin: 0;
+}
+
 /* Flashcard styles */
 .flashcard {
   position: relative;

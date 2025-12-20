@@ -5,10 +5,14 @@ A Progressive Web Application for learning vocabulary through flashcards with sp
 ## Features
 
 - **Multi-language Support**: Study Spanish-English and German-English word pairs
+- **Text-to-Speech**: Click speaker icons to hear words and example sentences pronounced in the correct language
 - **Difficulty Tracking**: Mark cards as Easy, Medium, or Hard to prioritize your learning
+- **Time-Based Filtering**: Filter cards by last review time (Last Week, Month, Quarter, Year)
 - **Smart Filtering**: Filter cards by difficulty level (New, Easy, Medium, Hard)
 - **Reverse Direction**: Toggle between source→target and target→source language practice
 - **Card Management**: Add, edit, and delete flashcards
+- **IndexedDB Storage**: Efficient local database storage with automatic data synchronization
+- **Case-Insensitive Matching**: Words are matched regardless of capitalization
 - **Persistent Progress**: Your preferences and card difficulties are saved locally
 - **Responsive Design**: Works seamlessly on desktop and mobile devices
 - **Offline Support**: PWA capabilities allow offline usage
@@ -23,7 +27,9 @@ A Progressive Web Application for learning vocabulary through flashcards with sp
 ### PWA Features
 - **Service Worker**: Offline caching and app-like experience
 - **Web App Manifest**: Installable on mobile and desktop
-- **LocalStorage**: Client-side data persistence for user preferences and progress
+- **IndexedDB**: Client-side database for efficient card storage and progress tracking
+- **LocalStorage**: User preferences and filter settings persistence
+- **Web Speech API**: Text-to-speech functionality for pronunciation
 
 ### Data Format
 - **JSON**: Card data and metadata stored in JSON files
@@ -42,12 +48,17 @@ flashcard-pwa/
 │
 ├── js/
 │   ├── app.js             # Main application controller
+│   ├── db/
+│   │   └── cardDatabase.js        # IndexedDB wrapper for card storage
+│   ├── services/
+│   │   └── dataSyncService.js     # Data synchronization service
 │   ├── screens/
-│   │   ├── welcomeScreen.js      # Welcome/home screen with language selection
-│   │   ├── studyScreen.js        # Flashcard study interface
-│   │   └── manageCardsScreen.js  # Card management (CRUD operations)
+│   │   ├── welcomeScreen.js       # Welcome/home screen with language selection
+│   │   ├── studyScreen.js         # Flashcard study interface with TTS
+│   │   └── manageCardsScreen.js   # Card management (CRUD operations)
 │   └── utils/
-│       └── storage.js     # LocalStorage utilities
+│       ├── md5.js                 # Hash utility for file change detection
+│       └── speechService.js       # Text-to-speech service
 │
 ├── data/
 │   ├── metadata.json      # Language pair definitions
@@ -172,14 +183,81 @@ The app uses LocalStorage to persist user preferences and progress:
 - Safari (latest)
 - Mobile browsers (iOS Safari, Chrome Mobile)
 
+## Text-to-Speech Feature
+
+The app includes built-in text-to-speech functionality powered by the Web Speech API:
+
+### How It Works
+- **Speaker Icons**: Click the speaker icon (🔊) next to any word or example sentence
+- **Automatic Language Detection**: The app automatically uses the correct language voice based on the card's language pair
+- **Supported Languages**: Spanish, German, and English pronunciation
+- **Browser Compatibility**: Works in all modern browsers that support the Web Speech API
+
+### Technical Implementation
+The `speechService.js` module provides:
+- Voice selection based on language code
+- Automatic fallback to default voices if specific language voices aren't available
+- Speech rate, pitch, and volume control
+- Stop functionality to cancel ongoing speech
+
+### Usage in Study Mode
+1. On the **front of the card**: Click the speaker icon to hear the word in the source language
+2. On the **back of the card**: Click the speaker icon to hear the translation
+3. For **example sentences**: Click the smaller speaker icon next to the example to hear it pronounced
+
+## IndexedDB Storage
+
+The app uses IndexedDB for efficient local storage:
+
+### Features
+- **Composite Keys**: Cards are stored with `[languagePair, word]` as the unique identifier
+- **Case-Insensitive**: Words are normalized to lowercase for storage while preserving original capitalization for display
+- **User Progress Tracking**: Stores difficulty level, review count, and last reviewed timestamp in a `stats` object
+- **Automatic Synchronization**: Detects changes in JSON data files via MD5 checksums and merges updates while preserving user progress
+
+### Data Schema
+```javascript
+{
+  languagePair: "es-en",
+  word: "hola",              // Lowercase for matching
+  originalWord: "Hola",      // Original capitalization for display
+  type: "interjection",
+  translation: "hello",
+  example: "Hola, ¿cómo estás?",
+  range_count: 100,
+  frequency: 257365,
+  stats: {
+    difficulty: 1,           // 1=Easy, 2=Medium, 3=Hard, null=New
+    lastReviewed: 1703001234567,  // Timestamp
+    reviewCount: 5
+  }
+}
+```
+
+## Time-Based Filtering
+
+Filter cards based on when they were last reviewed:
+
+### Filter Options
+- **Last Week**: Cards reviewed in the past 7 days
+- **Last Month**: Cards reviewed in the past 30 days
+- **Last Quarter**: Cards reviewed in the past 90 days
+- **Last Year**: Cards reviewed in the past 365 days
+
+### Filter Modes
+- **Only**: Show only cards reviewed within the selected time period
+- **Not**: Show only cards reviewed before the selected time period (or never reviewed)
+
+The difficulty counts update dynamically to reflect both difficulty and time filters.
+
 ## Future Enhancements
 
 - Spaced repetition algorithm
 - Statistics and progress tracking
-- Audio pronunciation
 - Image support for cards
 - Export/import card decks
 - Cloud sync
+- Additional language pairs
 
 ## License
 

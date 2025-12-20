@@ -1,4 +1,5 @@
 import dataSyncService from '../services/dataSyncService.js';
+import speechService from '../utils/speechService.js';
 
 class StudyScreen {
   constructor(container, languagePairId, reverseDirection, onBack) {
@@ -154,15 +155,39 @@ class StudyScreen {
         <div class="flashcard" id="flashcard" ${this.isFlipped ? 'flipped' : ''}>
           <div class="card-face card-front">
             <div class="card-content">
-              <h2>${frontText}</h2>
+              <div class="text-with-speaker">
+                <h2>${frontText}</h2>
+                <button class="speaker-btn" data-text="${frontText}" data-lang="${this.reverseDirection ? 'en' : this.languagePairId.split('-')[0]}" aria-label="Speak" title="Speak">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                  </svg>
+                </button>
+              </div>
               <p class="hint">Tap to flip</p>
             </div>
           </div>
           <div class="card-face card-back">
             <div class="card-content">
-              <h2>${backText}</h2>
+              <div class="text-with-speaker">
+                <h2>${backText}</h2>
+                <button class="speaker-btn" data-text="${backText}" data-lang="${this.reverseDirection ? this.languagePairId.split('-')[0] : 'en'}" aria-label="Speak" title="Speak">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                  </svg>
+                </button>
+              </div>
               ${currentCard.type ? `<p class="card-type">(${currentCard.type})</p>` : ''}
-              ${currentCard.example ? `<p class="example">${currentCard.example}</p>` : ''}
+              ${currentCard.example ? `<div class="text-with-speaker example-container">
+                <p class="example">${currentCard.example}</p>
+                <button class="speaker-btn speaker-btn-small" data-text="${currentCard.example}" data-lang="${this.reverseDirection ? this.languagePairId.split('-')[0] : this.languagePairId.split('-')[0]}" aria-label="Speak example" title="Speak example">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                  </svg>
+                </button>
+              </div>` : ''}
             </div>
           </div>
         </div>
@@ -184,10 +209,24 @@ class StudyScreen {
     const flashcard = this.container.querySelector('#flashcard');
     const difficultyBtns = this.container.querySelectorAll('.difficulty-btn');
     const backBtn = this.container.querySelector('#back-btn');
+    const speakerBtns = this.container.querySelectorAll('.speaker-btn');
 
     if (flashcard) {
-      flashcard.addEventListener('click', () => this.toggleCard());
+      flashcard.addEventListener('click', (e) => {
+        if (!e.target.closest('.speaker-btn')) {
+          this.toggleCard();
+        }
+      });
     }
+
+    speakerBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const text = btn.dataset.text;
+        const lang = btn.dataset.lang;
+        speechService.speak(text, lang);
+      });
+    });
 
     difficultyBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
