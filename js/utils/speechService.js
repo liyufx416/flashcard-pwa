@@ -3,6 +3,12 @@ class SpeechService {
     this.synth = window.speechSynthesis;
     this.voices = [];
     this.voicesLoaded = false;
+    this.voiceLoadPromise = null;
+    this.useResponsiveVoice = false;
+    this.responsiveVoiceLoaded = false;
+    this.apiKey = null;
+    this.scriptLoaded = false;
+    this.responsiveVoiceTemporarilyUnavailable = false;
     
     // Language mapping for voice selection
     this.languageMap = {
@@ -83,18 +89,229 @@ class SpeechService {
       'en-ZA': 'en-ZA',
       'en-IN': 'en-IN'
     };
+
+    // ResponsiveVoice language mapping
+    this.responsiveVoiceMap = {
+      'es': 'Spanish Female',
+      'es-MX': 'Spanish Latin American Female',
+      'es-AR': 'Spanish Latin American Female',
+      'fr': 'French Female',
+      'fr-CA': 'French Canadian Female',
+      'de': 'Deustch Female',
+      'de-AT': 'Deustch Female',
+      'de-CH': 'Deustch Female',
+      'it': 'Italian Female',
+      'pt': 'Portuguese Female',
+      'pt-BR': 'Portuguese Brazilian Female',
+      'pt-PT': 'Portuguese Female',
+      'ru': 'Russian Female',
+      'ja': 'Japanese Female',
+      'zh': 'Chinese Female',
+      'zh-CN': 'Chinese Female',
+      'zh-TW': 'Chinese Female',
+      'ko': 'Korean Female',
+      'ar': 'Arabic Female',
+      'hi': 'Hindi Female',
+      'th': 'Thai Female',
+      'vi': 'Vietnamese Female',
+      'nl': 'Dutch Female',
+      'sv': 'Swedish Female',
+      'no': 'Norwegian Female',
+      'da': 'Danish Female',
+      'fi': 'Finnish Female',
+      'pl': 'Polish Female',
+      'cs': 'Czech Female',
+      'hu': 'Hungarian Female',
+      'ro': 'Romanian Female',
+      'bg': 'Bulgarian Female',
+      'hr': 'Croatian Female',
+      'sr': 'Serbian Female',
+      'sl': 'Slovenian Female',
+      'sk': 'Slovak Female',
+      'et': 'Estonian Female',
+      'lv': 'Latvian Female',
+      'lt': 'Lithuanian Female',
+      'el': 'Greek Female',
+      'tr': 'Turkish Female',
+      'he': 'Hebrew Female',
+      'fa': 'Persian Female',
+      'ur': 'Urdu Female',
+      'bn': 'Bengali Female',
+      'ta': 'Tamil Female',
+      'te': 'Telugu Female',
+      'ml': 'Malayalam Female',
+      'kn': 'Kannada Female',
+      'gu': 'Gujarati Female',
+      'pa': 'Punjabi Female',
+      'mr': 'Marathi Female',
+      'ne': 'Nepali Female',
+      'si': 'Sinhala Female',
+      'my': 'Myanmar Female',
+      'km': 'Khmer Female',
+      'lo': 'Lao Female',
+      'ka': 'Georgian Female',
+      'am': 'Amharic Female',
+      'sw': 'Swahili Female',
+      'zu': 'Zulu Female',
+      'af': 'Afrikaans Female',
+      'is': 'Icelandic Female',
+      'mt': 'Maltese Female',
+      'cy': 'Welsh Female',
+      'ga': 'Irish Female',
+      'gd': 'Scottish Gaelic Female',
+      'eu': 'Basque Female',
+      'ca': 'Catalan Female',
+      'gl': 'Galician Female',
+      'en': 'US English Female',
+      'en-GB': 'UK English Female',
+      'en-AU': 'Australian Female',
+      'en-CA': 'Canadian Female',
+      'en-IE': 'Irish Female',
+      'en-ZA': 'South African Female',
+      'en-IN': 'Indian English Female'
+    };
+
+    this.init();
+  }
+
+  init() {
+    // Load API key from localStorage
+    this.apiKey = localStorage.getItem('responsiveVoiceApiKey') || null;
+    this.useResponsiveVoice = !!this.apiKey;
+    
+    console.log('SpeechService init - API key found:', !!this.apiKey);
+    console.log('SpeechService init - useResponsiveVoice:', this.useResponsiveVoice);
     
     if (this.synth) {
-      this.loadVoices();
+      this.voiceLoadPromise = this.waitForVoices();
       if (speechSynthesis.onvoiceschanged !== undefined) {
         speechSynthesis.onvoiceschanged = () => this.loadVoices();
       }
     }
+
+    // Load ResponsiveVoice if API key is available
+    if (this.useResponsiveVoice) {
+      console.log('Loading ResponsiveVoice with API key...');
+      this.responsiveVoicePromise = this.loadResponsiveVoiceWithKey().catch(error => {
+        console.warn('ResponsiveVoice temporarily unavailable:', error.message);
+        this.responsiveVoiceLoaded = false;
+        this.responsiveVoiceTemporarilyUnavailable = true;
+        // Don't clear the API key - it's still configured, just temporarily unavailable
+      });
+    } else {
+      console.log('No API key found, ResponsiveVoice will not be loaded');
+      this.responsiveVoicePromise = Promise.resolve();
+    }
+  }
+
+  async waitForVoices() {
+    return new Promise((resolve) => {
+      const checkVoices = () => {
+        const voices = this.synth.getVoices();
+        if (voices.length > 0) {
+          this.voices = voices;
+          this.voicesLoaded = true;
+          console.log('Voices loaded:', voices.length, 'voices available');
+          resolve(voices);
+        } else {
+          setTimeout(checkVoices, 100);
+        }
+      };
+      checkVoices();
+    });
   }
 
   loadVoices() {
     this.voices = this.synth.getVoices();
     this.voicesLoaded = true;
+  }
+
+  async loadResponsiveVoiceWithKey(forceReload = false) {
+    console.log(`loadResponsiveVoiceWithKey called - forceReload: ${forceReload}`);
+    
+    if (!this.apiKey) {
+      console.error('No API key available for ResponsiveVoice');
+      throw new Error('No API key available for ResponsiveVoice');
+    }
+
+    // If script is already loaded and not forcing reload, just check status
+    if (this.scriptLoaded && !forceReload) {
+      console.log('Script already loaded and not forcing reload, checking status...');
+      if (typeof responsiveVoice !== 'undefined') {
+        this.responsiveVoiceLoaded = true;
+        console.log('ResponsiveVoice already available');
+        return;
+      }
+    }
+
+    // Remove existing script if forcing reload
+    if (forceReload) {
+      console.log('Force reload requested, removing existing script...');
+      window.location.reload();
+    }
+
+    return new Promise((resolve, reject) => {
+      // Create and inject the script
+      const script = document.createElement('script');
+      script.src = `https://code.responsivevoice.org/responsivevoice.js?key=${this.apiKey}`;
+      script.async = true;
+      script.id = 'responsivevoice-script'; // Add ID for easy removal
+      
+      script.onload = () => {
+        this.scriptLoaded = true;
+        
+        // Wait for responsiveVoice to be available
+        let attempts = 0;
+        const maxAttempts = 50; // 5 seconds timeout
+        
+        const checkResponsiveVoice = () => {
+          attempts++;
+          
+          if (typeof responsiveVoice !== 'undefined') {
+            this.responsiveVoiceLoaded = true;
+            console.log('ResponsiveVoice loaded successfully');
+            console.log('Available methods:', Object.keys(responsiveVoice));
+            resolve();
+          } else if (attempts < maxAttempts) {
+            setTimeout(checkResponsiveVoice, 100);
+          } else {
+            console.error('ResponsiveVoice failed to initialize after script load');
+            reject(new Error('ResponsiveVoice failed to initialize - invalid API key or network error'));
+          }
+        };
+        checkResponsiveVoice();
+      };
+      
+      script.onerror = () => {
+        console.error('Failed to load ResponsiveVoice script');
+        reject(new Error('Failed to load ResponsiveVoice script - check network connection'));
+      };
+      
+      document.head.appendChild(script);
+    });
+  }
+
+  // Remove existing ResponsiveVoice script
+  removeResponsiveVoiceScript() {
+    console.log('Removing existing ResponsiveVoice script...');
+    
+    // Remove script element
+    const existingScript = document.getElementById('responsivevoice-script');
+    if (existingScript) {
+      existingScript.remove();
+    }
+    
+    // Clear global variables
+    if (typeof window.responsiveVoice !== 'undefined') {
+      delete window.responsiveVoice;
+    }
+    
+    // Reset state
+    this.scriptLoaded = false;
+    this.responsiveVoiceLoaded = false;
+    this.responsiveVoiceTemporarilyUnavailable = false;
+    
+    console.log('ResponsiveVoice script removed and state reset');
   }
 
   getVoiceForLanguage(languageCode) {
@@ -104,20 +321,159 @@ class SpeechService {
 
     const targetLang = this.languageMap[languageCode] || languageCode;
     
-    const voice = this.voices.find(v => v.lang.startsWith(targetLang.split('-')[0]));
+    // Try exact match first
+    let voice = this.voices.find(v => v.lang === targetLang);
+    
+    // If no exact match, try prefix match
+    if (!voice) {
+      const langPrefix = targetLang.split('-')[0];
+      voice = this.voices.find(v => v.lang.startsWith(langPrefix));
+    }
+    
+    // If still no match, try the original language code
+    if (!voice) {
+      voice = this.voices.find(v => v.lang.startsWith(languageCode));
+    }
+    
     return voice || this.voices[0];
   }
 
-  speak(text, languageCode = 'es') {
+  // Check if a language is supported by local voices
+  isLanguageSupportedLocally(languageCode) {
+    if (!this.voicesLoaded || this.voices.length === 0) {
+      return false;
+    }
+
+    const targetLang = this.languageMap[languageCode] || languageCode;
+    
+    // Check exact match
+    if (this.voices.some(v => v.lang === targetLang)) {
+      return true;
+    }
+    
+    // Check prefix match
+    const langPrefix = targetLang.split('-')[0];
+    if (this.voices.some(v => v.lang.startsWith(langPrefix))) {
+      return true;
+    }
+    
+    // Check original language code
+    if (this.voices.some(v => v.lang.startsWith(languageCode))) {
+      return true;
+    }
+    
+    return false;
+  }
+
+  // ResponsiveVoice TTS fallback
+  async speakWithResponsiveVoice(text, languageCode) {
+    console.log(`speakWithResponsiveVoice() called with text: "${text}", language: ${languageCode}`);
+    
+    if (!this.useResponsiveVoice || !this.responsiveVoiceLoaded) {
+      console.error('ResponsiveVoice not available or not loaded');
+      throw new Error('ResponsiveVoice not available or not loaded');
+    }
+
+    const responsiveVoiceName = this.responsiveVoiceMap[languageCode] || 'US English Female';
+    console.log(`Using ResponsiveVoice voice: ${responsiveVoiceName}`);
+    console.log('responsiveVoice object available:', typeof responsiveVoice !== 'undefined');
+    
+    return new Promise((resolve, reject) => {
+      try {
+        console.log('Calling responsiveVoice.speak()...');
+        responsiveVoice.speak(text, responsiveVoiceName, {
+          onstart: () => console.log('ResponsiveVoice started speaking'),
+          onend: () => {
+            console.log('ResponsiveVoice finished speaking');
+            resolve();
+          },
+          onerror: (error) => {
+            console.error('ResponsiveVoice error:', error);
+            reject(new Error('ResponsiveVoice error: ' + error));
+          }
+        });
+      } catch (error) {
+        console.error('ResponsiveVoice failed with exception:', error);
+        reject(new Error('ResponsiveVoice failed: ' + error.message));
+      }
+    });
+  }
+
+  async speak(text, languageCode = 'es') {
+    console.log(`speak() called with text: "${text}", language: ${languageCode}`);
+    
     if (!this.synth) {
       console.warn('Speech synthesis not supported');
       return;
     }
+    
+    // Wait for voices to be loaded
+    if (!this.voicesLoaded) {
+      console.log('Waiting for local voices to load...');
+      await this.voiceLoadPromise;
+    }
 
+    // Check if language is supported locally
+    const localSupport = this.isLanguageSupportedLocally(languageCode);
+    console.log(`Local support for ${languageCode}:`, localSupport);
+    
+    if (!localSupport) {
+      console.log(`Language ${languageCode} not supported locally, trying ResponsiveVoice fallback`);
+      
+      if (this.useResponsiveVoice) {
+        console.log('ResponsiveVoice is configured, waiting for it to load...');
+        // Wait for ResponsiveVoice to be loaded
+        await this.responsiveVoicePromise;
+        
+        if (this.responsiveVoiceLoaded) {
+          console.log('ResponsiveVoice loaded, attempting to speak...');
+          try {
+            await this.speakWithResponsiveVoice(text, languageCode);
+            console.log('ResponsiveVoice speech completed successfully');
+            return;
+          } catch (error) {
+            console.warn('ResponsiveVoice fallback failed, using default voice:', error.message);
+          }
+        } else {
+          console.warn('ResponsiveVoice temporarily unavailable');
+          // Show dialog for reconfiguration or local voice installation
+          const shouldRetry = await this.promptForApiKey(languageCode, true);
+          if (shouldRetry) {
+            console.log('User reconfigured ResponsiveVoice, retrying speech...');
+            // Wait a moment for the new ResponsiveVoice to be fully loaded
+            if (this.responsiveVoicePromise) {
+              await this.responsiveVoicePromise;
+            }
+            // Retry speaking with the reconfigured API key
+            await this.speak(text, languageCode);
+            return;
+          }
+        }
+      } else {
+        console.log('ResponsiveVoice not configured, showing prompt dialog...');
+        // Show dialog to get API key or suggest local voice installation
+        const shouldRetry = await this.promptForApiKey(languageCode, false);
+        if (shouldRetry) {
+          console.log('User provided API key, retrying speech...');
+          // Wait a moment for the new ResponsiveVoice to be fully loaded
+          if (this.responsiveVoicePromise) {
+            await this.responsiveVoicePromise;
+          }
+          // Retry speaking with the newly configured API key
+          await this.speak(text, languageCode);
+          return;
+        }
+      }
+    }
+    
+    // Use local speech synthesis
+    console.log('Using local speech synthesis...');
     this.synth.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
     const voice = this.getVoiceForLanguage(languageCode);
+    
+    console.log('Selected voice:', voice ? voice.name : 'default');
     
     if (voice) {
       utterance.voice = voice;
@@ -130,6 +486,7 @@ class SpeechService {
     utterance.pitch = 1;
     utterance.volume = 1;
 
+    console.log('Speaking with local synthesis...');
     this.synth.speak(utterance);
   }
 
@@ -156,6 +513,345 @@ class SpeechService {
   // Method to get full language mapping
   getLanguageMap() {
     return { ...this.languageMap };
+  }
+
+  // Prompt user for API key when fallback is needed
+  async promptForApiKey(languageCode, isReconfiguration = false) {
+    return new Promise((resolve) => {
+      // Create modal dialog
+      const modal = document.createElement('div');
+      modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+      `;
+
+      const dialog = document.createElement('div');
+      dialog.style.cssText = `
+        background: white;
+        padding: 2rem;
+        border-radius: 8px;
+        max-width: 500px;
+        width: 90%;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      `;
+
+      const languageName = this.getLanguageName(languageCode);
+      const hasExistingKey = !!this.apiKey;
+      
+      let title, message, option2Text, placeholder, saveText;
+      
+      if (isReconfiguration) {
+        title = 'ResponsiveVoice Temporarily Unavailable';
+        message = `ResponsiveVoice service is temporarily unavailable for <strong>${languageName}</strong>. This may be due to network issues or service maintenance. You have two options:`;
+        option2Text = hasExistingKey ? 
+          `Replace ResponsiveVoice API Key (current: ***${this.apiKey.slice(-4)})` : 
+          `Enter ResponsiveVoice API Key`;
+        placeholder = hasExistingKey ? 'Enter new API key (optional)' : 'Enter ResponsiveVoice API Key';
+        saveText = hasExistingKey ? 'Update & Retry' : 'Save & Retry';
+      } else {
+        title = 'Voice Support Needed';
+        message = `Your browser doesn't have local voice support for <strong>${languageName}</strong>. You have two options:`;
+        option2Text = 'Use ResponsiveVoice';
+        placeholder = 'Enter ResponsiveVoice API Key';
+        saveText = 'Save & Retry';
+      }
+      
+      dialog.innerHTML = `
+        <h3 style="margin-top: 0; color: #333;">${title}</h3>
+        <p style="color: #666; line-height: 1.5;">
+          ${message}
+        </p>
+        <div style="margin: 1rem 0;">
+          <h4 style="margin-bottom: 0.5rem; color: #333;">Option 1: Install Local Voice Package</h4>
+          <p style="color: #666; font-size: 0.9rem; margin-top: 0.25rem;">
+            Install the ${languageName} voice package through your operating system's language settings.
+          </p>
+        </div>
+        <div style="margin: 1rem 0;">
+          <h4 style="margin-bottom: 0.5rem; color: #333;">Option 2: ${option2Text}</h4>
+          <p style="color: #666; font-size: 0.9rem; margin-top: 0.25rem;">
+            ${isReconfiguration ? 'Enter a new API key to reconfigure ResponsiveVoice, or leave empty to keep existing key.' : 
+                'Enter your ResponsiveVoice API key to get high-quality ' + languageName + ' speech synthesis.'}
+          </p>
+          <p style="color: #666; font-size: 0.9rem; margin-top: 0.25rem;">
+            <b>After you reconfigure the API Key the application will reload.</b>
+          </p>
+          <input type="password" id="api-key-input" placeholder="${placeholder}" 
+                 style="width: 100%; padding: 0.5rem; margin: 0.5rem 0; border: 1px solid #ddd; border-radius: 4px;">
+          ${hasExistingKey && !isReconfiguration ? `<small style="color: #666;">Current key: ***${this.apiKey.slice(-4)}</small>` : ''}
+        </div>
+        <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.5rem;">
+          <button id="cancel-btn" style="padding: 0.5rem 1rem; border: 1px solid #ddd; background: #f5f5f5; border-radius: 4px; cursor: pointer;">Cancel</button>
+          <button id="skip-btn" style="padding: 0.5rem 1rem; border: 1px solid #ddd; background: #6c757d; color: white; border-radius: 4px; cursor: pointer;">Use Local Voice</button>
+          <button id="save-btn" style="padding: 0.5rem 1rem; border: none; background: #007bff; color: white; border-radius: 4px; cursor: pointer;">${saveText}</button>
+        </div>
+      `;
+
+      modal.appendChild(dialog);
+      document.body.appendChild(modal);
+
+      const apiKeyInput = dialog.querySelector('#api-key-input');
+      const cancelBtn = dialog.querySelector('#cancel-btn');
+      const skipBtn = dialog.querySelector('#skip-btn');
+      const saveBtn = dialog.querySelector('#save-btn');
+
+      const cleanup = () => {
+        document.body.removeChild(modal);
+      };
+
+      cancelBtn.addEventListener('click', () => {
+        cleanup();
+        resolve(false);
+      });
+
+      skipBtn.addEventListener('click', () => {
+        cleanup();
+        resolve(false); // Use local voice (fallback)
+      });
+
+      saveBtn.addEventListener('click', async () => {
+        const newApiKey = apiKeyInput.value.trim();
+        
+        console.log('Save button clicked:', {
+          isReconfiguration,
+          newApiKey: newApiKey || '(empty)',
+          hasExistingKey,
+          condition: isReconfiguration && !newApiKey && hasExistingKey
+        });
+        
+        // If reconfiguration and no new key provided, retry with existing key
+        if (isReconfiguration && !newApiKey && hasExistingKey) {
+          console.log('Attempting to retry ResponsiveVoice with existing key...');
+          try {
+            // Attempt to reload ResponsiveVoice with existing key
+            await this.retryResponsiveVoice();
+            cleanup();
+            resolve(true);
+            return;
+          } catch (error) {
+            alert('Failed to reload ResponsiveVoice: ' + error.message);
+            return;
+          }
+        }
+        
+        if (newApiKey) {
+          try {
+            await this.setApiKey(newApiKey);
+            cleanup();
+            resolve(true);
+          } catch (error) {
+            alert('Invalid API key: ' + error.message);
+          }
+        } else if (!isReconfiguration) {
+          alert('Please enter a valid API key');
+        }
+      });
+
+      // Close on outside click
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          cleanup();
+          resolve(false);
+        }
+      });
+
+      // Focus on input
+      setTimeout(() => apiKeyInput.focus(), 100);
+    });
+  }
+
+  // Set API key and load ResponsiveVoice
+  async setApiKey(apiKey) {
+    // Validate API key format (basic check)
+    if (!apiKey || apiKey.length < 8) {
+      throw new Error('Invalid API key format');
+    }
+
+    const isNewKey = apiKey !== this.apiKey;
+    this.apiKey = apiKey;
+    this.useResponsiveVoice = true;
+    localStorage.setItem('responsiveVoiceApiKey', apiKey);
+
+    // Load ResponsiveVoice with new API key (force reload if it's a new key)
+    try {
+      this.responsiveVoicePromise = this.loadResponsiveVoiceWithKey(isNewKey);
+      await this.responsiveVoicePromise;
+      this.responsiveVoiceTemporarilyUnavailable = false;
+    } catch (error) {
+      // If loading fails, don't remove the API key - it might be a temporary issue
+      this.responsiveVoiceTemporarilyUnavailable = true;
+      throw error;
+    }
+  }
+
+  // Retry loading ResponsiveVoice (for temporary failures)
+  async retryResponsiveVoice() {
+    console.log('retryResponsiveVoice called - checking API key...');
+    
+    if (!this.apiKey) {
+      console.error('No API key available for retry');
+      throw new Error('No API key available for retry');
+    }
+
+    console.log('Force reloading ResponsiveVoice with key:', '***' + this.apiKey.slice(-4));
+    this.responsiveVoiceTemporarilyUnavailable = false;
+    
+    try {
+      // Force reload the script
+      console.log('Calling loadResponsiveVoiceWithKey(true)...');
+      this.responsiveVoicePromise = this.loadResponsiveVoiceWithKey(true);
+      await this.responsiveVoicePromise;
+      console.log('ResponsiveVoice force reload successful');
+    } catch (error) {
+      console.warn('ResponsiveVoice force reload failed:', error.message);
+      this.responsiveVoiceTemporarilyUnavailable = true;
+      throw error;
+    }
+  }
+
+  // Get language name for display
+  getLanguageName(languageCode) {
+    const names = {
+      'es': 'Spanish',
+      'es-MX': 'Spanish (Latin American)',
+      'es-AR': 'Spanish (Latin American)',
+      'fr': 'French',
+      'fr-CA': 'French (Canadian)',
+      'de': 'German',
+      'de-AT': 'German (Austrian)',
+      'de-CH': 'German (Swiss)',
+      'it': 'Italian',
+      'pt': 'Portuguese',
+      'pt-BR': 'Portuguese (Brazilian)',
+      'pt-PT': 'Portuguese (European)',
+      'ru': 'Russian',
+      'ja': 'Japanese',
+      'zh': 'Chinese',
+      'zh-CN': 'Chinese (Simplified)',
+      'zh-TW': 'Chinese (Traditional)',
+      'ko': 'Korean',
+      'ar': 'Arabic',
+      'hi': 'Hindi',
+      'th': 'Thai',
+      'vi': 'Vietnamese',
+      'nl': 'Dutch',
+      'sv': 'Swedish',
+      'no': 'Norwegian',
+      'da': 'Danish',
+      'fi': 'Finnish',
+      'pl': 'Polish',
+      'cs': 'Czech',
+      'hu': 'Hungarian',
+      'ro': 'Romanian',
+      'bg': 'Bulgarian',
+      'hr': 'Croatian',
+      'sr': 'Serbian',
+      'sl': 'Slovenian',
+      'sk': 'Slovak',
+      'et': 'Estonian',
+      'lv': 'Latvian',
+      'lt': 'Lithuanian',
+      'el': 'Greek',
+      'tr': 'Turkish',
+      'he': 'Hebrew',
+      'fa': 'Persian',
+      'ur': 'Urdu',
+      'bn': 'Bengali',
+      'ta': 'Tamil',
+      'te': 'Telugu',
+      'ml': 'Malayalam',
+      'kn': 'Kannada',
+      'gu': 'Gujarati',
+      'pa': 'Punjabi',
+      'mr': 'Marathi',
+      'ne': 'Nepali',
+      'si': 'Sinhala',
+      'my': 'Myanmar',
+      'km': 'Khmer',
+      'lo': 'Lao',
+      'ka': 'Georgian',
+      'am': 'Amharic',
+      'sw': 'Swahili',
+      'zu': 'Zulu',
+      'af': 'Afrikaans',
+      'is': 'Icelandic',
+      'mt': 'Maltese',
+      'cy': 'Welsh',
+      'ga': 'Irish',
+      'gd': 'Scottish Gaelic',
+      'eu': 'Basque',
+      'ca': 'Catalan',
+      'gl': 'Galician',
+      'en': 'English',
+      'en-GB': 'English (British)',
+      'en-AU': 'English (Australian)',
+      'en-CA': 'English (Canadian)',
+      'en-IE': 'English (Irish)',
+      'en-ZA': 'English (South African)',
+      'en-IN': 'English (Indian)'
+    };
+    return names[languageCode] || languageCode;
+  }
+
+  // Get ResponsiveVoice status
+  getResponsiveVoiceStatus() {
+    let status = 'Not configured';
+    if (this.useResponsiveVoice && this.responsiveVoiceLoaded) {
+      status = 'Configured and loaded';
+    } else if (this.useResponsiveVoice && this.responsiveVoiceTemporarilyUnavailable) {
+      status = 'Temporarily unavailable';
+    } else if (this.useResponsiveVoice && !this.responsiveVoiceLoaded) {
+      status = 'Loading...';
+    } else if (!this.useResponsiveVoice) {
+      status = 'Not configured';
+    }
+
+    return {
+      enabled: this.useResponsiveVoice,
+      loaded: this.responsiveVoiceLoaded,
+      temporarilyUnavailable: this.responsiveVoiceTemporarilyUnavailable,
+      apiKey: this.apiKey ? '***' + this.apiKey.slice(-4) : null,
+      available: typeof responsiveVoice !== 'undefined',
+      status: status
+    };
+  }
+
+  // Clear API key
+  clearApiKey() {
+    this.apiKey = null;
+    this.useResponsiveVoice = false;
+    this.responsiveVoiceLoaded = false;
+    this.scriptLoaded = false;
+    localStorage.removeItem('responsiveVoiceApiKey');
+  }
+
+  // Test ResponsiveVoice
+  async testResponsiveVoice(text = 'Hello world, this is a test of ResponsiveVoice.', languageCode = 'en') {
+    if (!this.useResponsiveVoice) {
+      throw new Error('ResponsiveVoice not enabled');
+    }
+    
+    // Wait for ResponsiveVoice to be loaded
+    await this.responsiveVoicePromise;
+    
+    if (!this.responsiveVoiceLoaded) {
+      throw new Error('ResponsiveVoice failed to load');
+    }
+    
+    try {
+      await this.speakWithResponsiveVoice(text, languageCode);
+      return true;
+    } catch (error) {
+      throw error;
+    }
   }
 }
 

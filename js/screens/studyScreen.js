@@ -220,11 +220,11 @@ class StudyScreen {
     }
 
     speakerBtns.forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const text = btn.dataset.text;
         const lang = btn.dataset.lang;
-        speechService.speak(text, lang);
+        await speechService.speak(text, lang);
       });
     });
 

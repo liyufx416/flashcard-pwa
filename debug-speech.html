@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Speech Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        button { margin: 5px; padding: 10px 15px; }
+        .status { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 3px; }
+        input { margin: 5px; padding: 8px; width: 300px; }
+    </style>
+</head>
+<body>
+    <h1>Speech Service Debug</h1>
+    
+    <div class="test-section">
+        <h2>Check API Key Status</h2>
+        <button onclick="checkStatus()">Check Status</button>
+        <div id="status-display" class="status">Status will appear here</div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Spanish Speech</h2>
+        <button onclick="testSpanish()">Test Spanish (Hola mundo)</button>
+        <button onclick="testSpanishSentence()">Test Spanish Sentence</button>
+        <div id="spanish-status" class="status">Spanish test results will appear here</div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Other Languages</h2>
+        <button onclick="testGerman()">Test German</button>
+        <button onclick="testFrench()">Test French</button>
+        <div id="other-status" class="status">Other language test results will appear here</div>
+    </div>
+
+    <div class="test-section">
+        <h2>API Key Management</h2>
+        <input type="password" id="api-key-input" placeholder="Enter API Key">
+        <button onclick="setApiKey()">Set API Key</button>
+        <button onclick="clearApiKey()">Clear API Key</button>
+        <div id="api-status" class="status">API key status will appear here</div>
+    </div>
+
+    <script type="module">
+        import speechService from './js/utils/speechService.js';
+
+        window.checkStatus = () => {
+            const status = document.getElementById('status-display');
+            const rvStatus = speechService.getResponsiveVoiceStatus();
+            const localVoices = speechService.voices;
+            
+            status.innerHTML = `
+                <strong>ResponsiveVoice Status:</strong><br>
+                Enabled: ${rvStatus.enabled}<br>
+                Loaded: ${rvStatus.loaded}<br>
+                API Key: ${rvStatus.apiKey || 'None'}<br>
+                Available: ${rvStatus.available}<br><br>
+                <strong>Local Voices:</strong> ${localVoices.length} available<br>
+                Spanish support: ${speechService.isLanguageSupportedLocally('es')}<br>
+                German support: ${speechService.isLanguageSupportedLocally('de')}<br>
+                French support: ${speechService.isLanguageSupportedLocally('fr')}
+            `;
+        };
+
+        window.testSpanish = async () => {
+            const status = document.getElementById('spanish-status');
+            try {
+                status.innerHTML = 'Testing Spanish speech...';
+                await speechService.speak('Hola mundo', 'es');
+                status.innerHTML = '✅ Spanish speech completed successfully!';
+            } catch (error) {
+                status.innerHTML = '❌ Spanish speech failed: ' + error.message;
+            }
+        };
+
+        window.testSpanishSentence = async () => {
+            const status = document.getElementById('spanish-status');
+            try {
+                status.innerHTML = 'Testing Spanish sentence...';
+                await speechService.speak('¿Cómo estás hoy? Estoy aprendiendo español.', 'es');
+                status.innerHTML = '✅ Spanish sentence completed successfully!';
+            } catch (error) {
+                status.innerHTML = '❌ Spanish sentence failed: ' + error.message;
+            }
+        };
+
+        window.testGerman = async () => {
+            const status = document.getElementById('other-status');
+            try {
+                status.innerHTML = 'Testing German speech...';
+                await speechService.speak('Hallo Welt', 'de');
+                status.innerHTML = '✅ German speech completed successfully!';
+            } catch (error) {
+                status.innerHTML = '❌ German speech failed: ' + error.message;
+            }
+        };
+
+        window.testFrench = async () => {
+            const status = document.getElementById('other-status');
+            try {
+                status.innerHTML = 'Testing French speech...';
+                await speechService.speak('Bonjour le monde', 'fr');
+                status.innerHTML = '✅ French speech completed successfully!';
+            } catch (error) {
+                status.innerHTML = '❌ French speech failed: ' + error.message;
+            }
+        };
+
+        window.setApiKey = async () => {
+            const status = document.getElementById('api-status');
+            const input = document.getElementById('api-key-input');
+            const apiKey = input.value.trim();
+            
+            if (!apiKey) {
+                status.innerHTML = 'Please enter an API key';
+                return;
+            }
+
+            try {
+                status.innerHTML = 'Setting API key...';
+                await speechService.setApiKey(apiKey);
+                input.value = '';
+                status.innerHTML = '✅ API key set successfully!';
+                checkStatus(); // Refresh status
+            } catch (error) {
+                status.innerHTML = '❌ Failed to set API key: ' + error.message;
+            }
+        };
+
+        window.clearApiKey = () => {
+            const status = document.getElementById('api-status');
+            speechService.clearApiKey();
+            document.getElementById('api-key-input').value = '';
+            status.innerHTML = '✅ API key cleared!';
+            checkStatus(); // Refresh status
+        };
+
+        // Check status on load
+        setTimeout(checkStatus, 1000);
+    </script>
+</body>
+</html>

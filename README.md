@@ -38,10 +38,12 @@ A Progressive Web Application for learning vocabulary through flashcards with sp
 
 ```
 flashcard-pwa/
+├── debug-speech.html       # Speech service debugging tool
+├── INDEXEDDB_MIGRATION.md # IndexedDB migration documentation
 ├── index.html              # Main HTML entry point
 ├── manifest.json           # PWA manifest configuration
-├── sw.js                   # Service worker for offline support
 ├── README.md              # This file
+├── sw.js                   # Service worker for offline support
 │
 ├── css/
 │   └── style.css          # All application styles
@@ -66,7 +68,8 @@ flashcard-pwa/
 │   └── de-en.json         # German-English vocabulary (5 cards)
 │
 └── images/
-    └── icons/             # App icons for PWA
+    ├── favicon.ico         # Favicon for the app
+    └── icon.svg             # App icon for PWA
 
 ```
 
@@ -195,10 +198,20 @@ The app includes built-in text-to-speech functionality powered by the Web Speech
 
 ### Technical Implementation
 The `speechService.js` module provides:
+- **ResponsiveVoice Integration**: Optional cloud-based TTS with API key support
+- **Browser Native Voices**: Fallback to built-in browser speech synthesis
 - Voice selection based on language code
 - Automatic fallback to default voices if specific language voices aren't available
 - Speech rate, pitch, and volume control
 - Stop functionality to cancel ongoing speech
+- API key management for enhanced voice quality
+
+### Debugging Speech Service
+A dedicated debugging tool is available at `debug-speech.html`:
+- Test speech synthesis for different languages
+- Check API key status and ResponsiveVoice availability
+- Verify local browser voice support
+- Manage API keys for enhanced TTS functionality
 
 ### Usage in Study Mode
 1. On the **front of the card**: Click the speaker icon to hear the word in the source language
@@ -250,6 +263,34 @@ Filter cards based on when they were last reviewed:
 
 The difficulty counts update dynamically to reflect both difficulty and time filters.
 
+## Recent Updates
+
+### IndexedDB Migration (Latest)
+The application has been fully migrated from localStorage to IndexedDB for improved performance and reliability:
+
+**Key Improvements:**
+- **Composite Key Storage**: Cards identified by `(languagePair, word)` instead of numeric IDs
+- **Automatic Data Sync**: Detects JSON file changes via MD5 checksums and merges updates
+- **Progress Preservation**: User progress maintained during data file updates
+- **Offline-First Architecture**: Complete offline functionality after initial sync
+- **Enhanced Performance**: Indexed queries for efficient filtering and sorting
+
+**New Modules:**
+- `js/db/cardDatabase.js` - Low-level IndexedDB operations
+- `js/services/dataSyncService.js` - High-level data synchronization
+- `js/utils/md5.js` - File change detection via checksums
+
+**Documentation:** See `INDEXEDDB_MIGRATION.md` for detailed technical documentation.
+
+### Enhanced Speech Service
+- **ResponsiveVoice Integration**: Optional cloud-based TTS with API key support
+- **Debug Tool**: `debug-speech.html` for testing and troubleshooting
+- **Improved Fallback**: Better handling of unavailable voices
+
+### UI Improvements
+- **Updated Icons**: New favicon and app icon implementation
+- **Enhanced Styling**: Improved visual consistency and responsiveness
+
 ## Future Enhancements
 
 - Spaced repetition algorithm
@@ -258,6 +299,8 @@ The difficulty counts update dynamically to reflect both difficulty and time fil
 - Export/import card decks
 - Cloud sync
 - Additional language pairs
+- Background sync via Service Worker
+- Conflict resolution for concurrent edits
 
 ## License
 

@@ -1,4 +1,5 @@
 import dataSyncService from '../services/dataSyncService.js';
+import speechService from '../utils/speechService.js';
 
 class WelcomeScreen {
   constructor(container, onStartStudy, onManageCards) {
@@ -214,6 +215,8 @@ class WelcomeScreen {
     const filterButtons = this.container.querySelectorAll('.difficulty-filter-btn');
     const timeModeButtons = this.container.querySelectorAll('.time-mode-btn');
     const timePeriodButtons = this.container.querySelectorAll('.time-period-btn');
+    const testSpeechBtn = this.container.querySelector('#test-speech');
+    const clearApiKeyBtn = this.container.querySelector('#clear-api-key');
 
     if (reverseDirection) {
       const savedReverseDirection = localStorage.getItem('reverseDirection');
@@ -361,6 +364,50 @@ class WelcomeScreen {
     manageCardsBtn.addEventListener('click', () => {
       this.onManageCards();
     });
+
+    // Speech settings event listeners
+    this.updateSpeechStatus();
+
+    if (testSpeechBtn) {
+      testSpeechBtn.addEventListener('click', async () => {
+        try {
+          await speechService.testResponsiveVoice('Hello, this is a test of ResponsiveVoice for Spanish: Hola mundo.', 'es');
+          alert('ResponsiveVoice test successful!');
+        } catch (error) {
+          alert('Speech test failed: ' + error.message);
+        }
+      });
+    }
+
+    if (clearApiKeyBtn) {
+      clearApiKeyBtn.addEventListener('click', () => {
+        if (confirm('Are you sure you want to clear the ResponsiveVoice API key?')) {
+          speechService.clearApiKey();
+          this.updateSpeechStatus();
+          alert('API key cleared successfully');
+        }
+      });
+    }
+  }
+
+  updateSpeechStatus() {
+    const statusElement = this.container.querySelector('#fallback-status');
+    if (statusElement) {
+      const status = speechService.getResponsiveVoiceStatus();
+      if (status.enabled && status.loaded) {
+        statusElement.textContent = `Configured (${status.apiKey})`;
+        statusElement.style.color = '#28a745';
+      } else if (status.enabled && !status.loaded) {
+        statusElement.textContent = 'Loading...';
+        statusElement.style.color = '#ffc107';
+      } else if (!status.enabled) {
+        statusElement.textContent = 'Not configured';
+        statusElement.style.color = '#6c757d';
+      } else {
+        statusElement.textContent = 'Error';
+        statusElement.style.color = '#dc3545';
+      }
+    }
   }
 }
 
