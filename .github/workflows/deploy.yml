@@ -1,9 +1,16 @@
-name: Deploy to S3 and Invalidate CloudFront
+name: Deploy to S3 and Invalidate CloudFront (using OIDC)
 
 on:
   push:
     branches:
-      - main
+      - main # Or your default branch like 'master'
+
+# Permissions required for OIDC.
+# id-token: write is crucial for the GHA to fetch an OIDC token.
+# contents: read is needed to checkout the repository.
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   deploy:
@@ -16,25 +23,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS Credentials (using OIDC)
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }} # Use the region secret
+          # The web-identity-token-file is automatically handled by the action when role-to-assume is used.
+          # No need to explicitly set web-identity-token-file: ${{ runner.temp }}/.github_actions_token
 
       - name: Sync files to S3
         run: |
           aws s3 sync . s3://${{ env.AWS_S3_BUCKET }}/ \
             --delete \
-            --exclude ".gitignore" \
             --exclude ".git/*" \
             --exclude ".github/*" \
+            --exclude "node_modules/*" # Add any other exclusions as needed
           echo "Successfully synced files to S3 bucket: ${{ env.AWS_S3_BUCKET }}"
 
       - name: Create CloudFront Invalidation
         run: |
           aws cloudfront create-invalidation \
             --distribution-id ${{ env.AWS_CLOUDFRONT_DISTRIBUTION_ID }} \
-            --paths "/*" 
+            --paths "/*" # Invalidate all paths. Use specific paths if needed, e.g., "/index.html"
           echo "Successfully initiated CloudFront invalidation for distribution: ${{ env.AWS_CLOUDFRONT_DISTRIBUTION_ID }}"
