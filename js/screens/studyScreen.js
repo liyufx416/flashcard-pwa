@@ -112,10 +112,24 @@ class StudyScreen {
   render() {
     if (this.cards.length === 0) {
       this.container.innerHTML = `
-        <div class="study-container">
+      <div class="study-container">
+        <header class="app-header">
+        <header class="app-header">
+          <button id="back-btn" class="btn-icon" aria-label="Back to menu" title="Back to menu">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+          </button>
+          <div class="header-content">
+            <h1>FlashCard</h1>
+          </div>
+          <div class="language-pair">${languagePairName}</div>
+        </header>
+        <div class="screen-content">
           <p>No cards available for this language pair.</p>
-          <button id="back-btn" class="btn btn-secondary">Back to Menu</button>
         </div>
+      </div>
       `;
       this.setupEventListeners();
       return;
@@ -143,60 +157,63 @@ class StudyScreen {
             </svg>
           </button>
           <div class="header-content">
-            <h1>Flashcard App</h1>
+            <h1>FlashCard</h1>
           </div>
           <div class="language-pair">${languagePairName}</div>
         </header>
         
-        <div class="progress">
-          Card ${this.currentCardIndex + 1} of ${this.cards.length}
-        </div>
-        
-        <div class="flashcard" id="flashcard" ${this.isFlipped ? 'flipped' : ''}>
-          <div class="card-face card-front">
-            <div class="card-content">
-              <div class="text-with-speaker">
-                <h2>${frontText}</h2>
-                <button class="speaker-btn" data-text="${frontText}" data-lang="${this.reverseDirection ? 'en' : this.languagePairId.split('-')[0]}" aria-label="Speak" title="Speak">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                  </svg>
-                </button>
+        <div class="screen-content">
+          <div class="progress">
+            Card ${this.currentCardIndex + 1} of ${this.cards.length}
+          </div>
+          
+          <div class="flashcard" id="flashcard" ${this.isFlipped ? 'flipped' : ''}>
+            <div class="card-face card-front">
+              <div class="card-content">
+                <div class="text-with-speaker">
+                  <h2>${frontText}</h2>
+                  <button class="speaker-btn" data-text="${frontText}" data-lang="${this.reverseDirection ? 'en' : this.languagePairId.split('-')[0]}" aria-label="Speak" title="Speak">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                  </button>
+                </div>
+                <div class="hint">Tap to flip</div>
               </div>
-              <p class="hint">Tap to flip</p>
+            </div>
+            <div class="card-face card-back">
+              <div class="card-content">
+                <div class="text-with-speaker">
+                  <h2>${backText}</h2>
+                  <button class="speaker-btn" data-text="${backText}" data-lang="${this.reverseDirection ? this.languagePairId.split('-')[0] : 'en'}" aria-label="Speak" title="Speak">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                  </button>
+                </div>
+                ${currentCard.type ? `<div class="card-type">(${currentCard.type})</div>` : ''}
+                <div class="hint">Tap to flip</div>
+                ${currentCard.example ? `<div class="text-with-speaker example-container">
+                  <p class="example">${currentCard.example}</p>
+                  <button class="speaker-btn speaker-btn-small" data-text="${currentCard.example}" data-lang="${this.reverseDirection ? this.languagePairId.split('-')[0] : this.languagePairId.split('-')[0]}" aria-label="Speak example" title="Speak example">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                  </button>
+                </div>` : ''}
+              </div>
             </div>
           </div>
-          <div class="card-face card-back">
-            <div class="card-content">
-              <div class="text-with-speaker">
-                <h2>${backText}</h2>
-                <button class="speaker-btn" data-text="${backText}" data-lang="${this.reverseDirection ? this.languagePairId.split('-')[0] : 'en'}" aria-label="Speak" title="Speak">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                  </svg>
-                </button>
-              </div>
-              ${currentCard.type ? `<p class="card-type">(${currentCard.type})</p>` : ''}
-              ${currentCard.example ? `<div class="text-with-speaker example-container">
-                <p class="example">${currentCard.example}</p>
-                <button class="speaker-btn speaker-btn-small" data-text="${currentCard.example}" data-lang="${this.reverseDirection ? this.languagePairId.split('-')[0] : this.languagePairId.split('-')[0]}" aria-label="Speak example" title="Speak example">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                  </svg>
-                </button>
-              </div>` : ''}
+          
+          <div class="card-actions">
+            <div class="difficulty-buttons">
+              <button class="difficulty-btn easy" data-difficulty="1">Easy</button>
+              <button class="difficulty-btn medium" data-difficulty="2">Medium</button>
+              <button class="difficulty-btn hard" data-difficulty="3">Hard</button>
             </div>
-          </div>
-        </div>
-        
-        <div class="card-actions">
-          <div class="difficulty-buttons">
-            <button class="difficulty-btn easy" data-difficulty="1">Easy</button>
-            <button class="difficulty-btn medium" data-difficulty="2">Medium</button>
-            <button class="difficulty-btn hard" data-difficulty="3">Hard</button>
           </div>
         </div>
       </div>
