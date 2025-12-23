@@ -11,6 +11,12 @@
       "name": "German - English",
       "sourceLang": "German",
       "targetLang": "English"
+    },
+    {
+      "id": "fr-en",
+      "name": "French - English",
+      "sourceLang": "French",
+      "targetLang": "English"
     }
   ]
 }

@@ -1,5 +1,6 @@
 import dataSyncService from '../services/dataSyncService.js';
 import speechService from '../utils/speechService.js';
+import AppInfoModal from '../utils/appInfoModal.js';
 
 class StudyScreen {
   constructor(container, languagePairId, reverseDirection, onBack) {
@@ -112,10 +113,24 @@ class StudyScreen {
   render() {
     if (this.cards.length === 0) {
       this.container.innerHTML = `
-        <div class="study-container">
+      <div class="study-container">
+        <header class="app-header">
+        <header class="app-header">
+          <button id="back-btn" class="btn-icon" aria-label="Back to menu" title="Back to menu">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+          </button>
+          <div class="header-content">
+            <h1>FlashCard</h1>
+          </div>
+          <div class="language-pair">${languagePairName}</div>
+        </header>
+        <div class="screen-content">
           <p>No cards available for this language pair.</p>
-          <button id="back-btn" class="btn btn-secondary">Back to Menu</button>
         </div>
+      </div>
       `;
       this.setupEventListeners();
       return;
@@ -143,60 +158,83 @@ class StudyScreen {
             </svg>
           </button>
           <div class="header-content">
-            <h1>Flashcard App</h1>
+            <h1 class="app-title clickable">FlashCard</h1>
           </div>
           <div class="language-pair">${languagePairName}</div>
         </header>
         
-        <div class="progress">
-          Card ${this.currentCardIndex + 1} of ${this.cards.length}
-        </div>
-        
-        <div class="flashcard" id="flashcard" ${this.isFlipped ? 'flipped' : ''}>
-          <div class="card-face card-front">
-            <div class="card-content">
-              <div class="text-with-speaker">
-                <h2>${frontText}</h2>
-                <button class="speaker-btn" data-text="${frontText}" data-lang="${this.reverseDirection ? 'en' : this.languagePairId.split('-')[0]}" aria-label="Speak" title="Speak">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                  </svg>
-                </button>
+        <div class="screen-content">
+          <div class="progress">
+            Card ${this.currentCardIndex + 1} of ${this.cards.length}
+          </div>
+          
+          <div class="flashcard" id="flashcard" ${this.isFlipped ? 'flipped' : ''}>
+            <div class="card-face card-front">
+              <div class="card-content">
+                <div class="text-with-speaker">
+                  <h2>${frontText}</h2>
+                  <button class="speaker-btn" data-text="${frontText}" data-lang="${this.reverseDirection ? 'en' : this.languagePairId.split('-')[0]}" aria-label="Speak" title="Speak">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                  </button>
+                </div>
+                <div class="hint">Tap to flip</div>
               </div>
-              <p class="hint">Tap to flip</p>
+            </div>
+            <div class="card-face card-back">
+              <div class="card-content">
+                <div class="text-with-speaker">
+                  <h2>${backText}</h2>
+                  <button class="speaker-btn" data-text="${backText}" data-lang="${this.reverseDirection ? this.languagePairId.split('-')[0] : 'en'}" aria-label="Speak" title="Speak">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                  </button>
+                </div>
+                ${currentCard.type ? `<div class="card-type">(${currentCard.type})</div>` : ''}
+                <div class="hint">Tap to flip</div>
+                ${currentCard.example ? `<div class="text-with-speaker example-container">
+                  <p class="example">${currentCard.example}</p>
+                  <button class="speaker-btn speaker-btn-small" data-text="${currentCard.example}" data-lang="${this.reverseDirection ? this.languagePairId.split('-')[0] : this.languagePairId.split('-')[0]}" aria-label="Speak example" title="Speak example">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                  </button>
+                </div>` : ''}
+              </div>
             </div>
           </div>
-          <div class="card-face card-back">
-            <div class="card-content">
-              <div class="text-with-speaker">
-                <h2>${backText}</h2>
-                <button class="speaker-btn" data-text="${backText}" data-lang="${this.reverseDirection ? this.languagePairId.split('-')[0] : 'en'}" aria-label="Speak" title="Speak">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                  </svg>
-                </button>
-              </div>
-              ${currentCard.type ? `<p class="card-type">(${currentCard.type})</p>` : ''}
-              ${currentCard.example ? `<div class="text-with-speaker example-container">
-                <p class="example">${currentCard.example}</p>
-                <button class="speaker-btn speaker-btn-small" data-text="${currentCard.example}" data-lang="${this.reverseDirection ? this.languagePairId.split('-')[0] : this.languagePairId.split('-')[0]}" aria-label="Speak example" title="Speak example">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                  </svg>
-                </button>
-              </div>` : ''}
+          
+          <div class="card-actions">
+            <div class="difficulty-buttons">
+              <button class="difficulty-btn easy ${currentCard.stats?.difficulty === 1 ? 'active' : ''}" data-difficulty="1">
+                <span class="btn-text">Easy</span>
+              </button>
+              <button class="difficulty-btn medium ${currentCard.stats?.difficulty === 2 ? 'active' : ''}" data-difficulty="2">
+                <span class="btn-text">Medium</span>
+              </button>
+              <button class="difficulty-btn hard ${currentCard.stats?.difficulty === 3 ? 'active' : ''}" data-difficulty="3">
+                <span class="btn-text">Hard</span>
+              </button>
             </div>
-          </div>
-        </div>
-        
-        <div class="card-actions">
-          <div class="difficulty-buttons">
-            <button class="difficulty-btn easy" data-difficulty="1">Easy</button>
-            <button class="difficulty-btn medium" data-difficulty="2">Medium</button>
-            <button class="difficulty-btn hard" data-difficulty="3">Hard</button>
+            <div class="navigation-buttons">
+              <button class="nav-btn prev-btn" id="prev-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                <span class="btn-text">Previous</span>
+              </button>
+              <button class="nav-btn next-btn" id="next-btn">
+                <span class="btn-text">Next</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -210,11 +248,17 @@ class StudyScreen {
     const difficultyBtns = this.container.querySelectorAll('.difficulty-btn');
     const backBtn = this.container.querySelector('#back-btn');
     const speakerBtns = this.container.querySelectorAll('.speaker-btn');
+    const prevBtn = this.container.querySelector('#prev-btn');
+    const nextBtn = this.container.querySelector('#next-btn');
+    const appTitle = this.container.querySelector('.app-title');
 
     if (flashcard) {
       flashcard.addEventListener('click', (e) => {
-        if (!e.target.closest('.speaker-btn')) {
-          this.toggleCard();
+        const yesBtn = document.querySelector('#prompt-yes');
+        if (!yesBtn) {
+          if (!e.target.closest('.speaker-btn') && !e.target.closest('.difficulty-btn') && !e.target.closest('.nav-btn')) {
+            this.toggleCard();
+          }
         }
       });
     }
@@ -230,13 +274,35 @@ class StudyScreen {
 
     difficultyBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const difficulty = parseInt(e.target.dataset.difficulty);
+        e.stopPropagation();
+        const difficulty = parseInt(e.currentTarget.dataset.difficulty);
         this.handleDifficulty(difficulty);
       });
     });
 
+    if (prevBtn) {
+      prevBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.handlePrevious();
+      });
+    }
+
+    if (nextBtn) {
+      nextBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.handleNext();
+      });
+    }
+
     if (backBtn) {
       backBtn.addEventListener('click', () => this.onBack());
+    }
+
+    // Add click listener for app title
+    if (appTitle) {
+      appTitle.addEventListener('click', () => {
+        AppInfoModal.show();
+      });
     }
   }
 
@@ -252,42 +318,160 @@ class StudyScreen {
     const currentCard = this.cards[this.currentCardIndex];
     
     try {
+      currentCard.stats.difficulty = difficulty;
+      const difficultyBtns = this.container.querySelectorAll('.difficulty-btn');
+      difficultyBtns.forEach(btn => {
+        btn.classList.remove('active');
+        if (difficulty === parseInt(btn.dataset.difficulty)) {
+          btn.classList.add('active');
+        }
+      });
       await dataSyncService.updateCardProgress(this.languagePairId, currentCard.word, difficulty);
     } catch (error) {
       console.error('Error updating card progress:', error);
     }
     
     // Move to the next card
-    this.currentCardIndex++;
-    this.isFlipped = false;
+    this.handleNext();
+  }
+
+  showFirstCardPrompt() {
+    const flashcard = this.container.querySelector('#flashcard');
+    const cardContent = flashcard.querySelector('.card-content');
     
-    if (this.currentCardIndex < this.cards.length) {
-      this.render();
-    } else {
-      // All cards reviewed
-      this.container.innerHTML = `
-        <div class="study-container">
-          <h2>Great job!</h2>
-          <p>You've reviewed all the cards.</p>
-          <button id="restart-btn" class="btn btn-primary">Start Over</button>
-          <button id="back-btn" class="btn btn-secondary">Back to Menu</button>
+    // Disable navigation and difficulty buttons
+    this.disableNavigationButtons(true);
+    
+    // Disable flip functionality by adding a class
+    flashcard.classList.remove('flipped');
+    
+    // Replace card content with prompt
+    cardContent.innerHTML = `
+      <div class="prompt-card">
+        <h3>This is the first card to review</h3>
+        <p>Do you wish to move to the last card of the pile?</p>
+        <div class="prompt-buttons">
+          <button class="btn btn-primary" id="prompt-yes">Yes</button>
+          <button class="btn btn-secondary-white-bg" id="prompt-no">No</button>
         </div>
-      `;
+      </div>
+    `;
+    
+    // Add event listeners for prompt buttons
+    const yesBtn = cardContent.querySelector('#prompt-yes');
+    const noBtn = cardContent.querySelector('#prompt-no');
+    
+    yesBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.animateCardTransition(this.cards.length - 1);
+      this.disableNavigationButtons(false);
+    });
+    
+    noBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.isFlipped = false;
+      flashcard.classList.remove('flipped');
+      this.render(); // Just re-render the current card
+      this.disableNavigationButtons(false);
+    });
+  }
+
+  showLastCardPrompt() {
+    const flashcard = this.container.querySelector('#flashcard');
+    const cardContent = flashcard.querySelector('.card-content');
+    
+    // Disable navigation and difficulty buttons
+    this.disableNavigationButtons(true);
+    
+    // Disable flip functionality by adding a class
+    flashcard.classList.remove('flipped');
+    
+    // Replace card content with prompt
+    cardContent.innerHTML = `
+      <div class="prompt-card">
+        <h3>You have completed reviewing the cards</h3>
+        <p>Do you wish to move to the first card of the pile?</p>
+        <div class="prompt-buttons">
+          <button class="btn btn-primary" id="prompt-yes">Yes</button>
+          <button class="btn btn-secondary-white-bg" id="prompt-no">No</button>
+        </div>
+      </div>
+    `;
+    
+    // Add event listeners for prompt buttons
+    const yesBtn = cardContent.querySelector('#prompt-yes');
+    const noBtn = cardContent.querySelector('#prompt-no');
+    
+    yesBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.animateCardTransition(0);
+      this.disableNavigationButtons(false);
+    });
+    
+    noBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.isFlipped = false;
+      flashcard.classList.remove('flipped');
+      this.render();
+      this.disableNavigationButtons(false);
+    });
+  }
+
+  disableNavigationButtons(disabled) {
+    const prevBtn = this.container.querySelector('#prev-btn');
+    const nextBtn = this.container.querySelector('#next-btn');
+    const difficultyBtns = this.container.querySelectorAll('.difficulty-btn');
+    
+    if (prevBtn) prevBtn.disabled = disabled;
+    if (nextBtn) nextBtn.disabled = disabled;
+    difficultyBtns.forEach(btn => btn.disabled = disabled);
+  }
+
+  // Add this method to your StudyScreen class
+  async animateCardTransition(nextCard = 0) {
+    const flashcard = this.container.querySelector('#flashcard');
+    if (!flashcard) return;
+    // Add flip-out animation
+    flashcard.classList.add('flip-out');
+    
+    // Wait for the flip-out animation to complete
+    await new Promise(resolve => {
+      flashcard.addEventListener('animationend', resolve, { once: true });
+    });
+    // Update the card content
+    this.currentCardIndex = nextCard;
+    
+    // Re-render the card
+    this.isFlipped = false;
+    this.render();
+    
+    // Get the new flashcard element
+    const newFlashcard = this.container.querySelector('#flashcard');
+    if (newFlashcard) {
+      // Add flip-in animation
+      newFlashcard.classList.add('flip-in');
       
-      const restartBtn = this.container.querySelector('#restart-btn');
-      const backBtn = this.container.querySelector('#back-btn');
-      
-      if (restartBtn) {
-        restartBtn.addEventListener('click', () => {
-          this.currentCardIndex = 0;
-          this.shuffleCards();
-          this.render();
-        });
-      }
-      
-      if (backBtn) {
-        backBtn.addEventListener('click', () => this.onBack());
-      }
+      // Clean up the animation classes after completion
+      newFlashcard.addEventListener('animationend', () => {
+        newFlashcard.classList.remove('flip-in');
+      }, { once: true });
+    }
+  }
+
+  // Update the handleNext and handlePrevious methods to use the new animation
+  handlePrevious() {
+    if (this.currentCardIndex === 0) {
+      this.showFirstCardPrompt();
+    } else {
+      this.animateCardTransition(this.currentCardIndex-1);
+    }
+  }
+
+  handleNext() {
+    if (this.currentCardIndex === this.cards.length - 1) {
+      this.showLastCardPrompt();
+    } else {
+      this.animateCardTransition(this.currentCardIndex+1);
     }
   }
 }

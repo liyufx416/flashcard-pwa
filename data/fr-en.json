@@ -1,0 +1,188 @@
+{
+  "id": "fr-en",
+  "name": "French - English",
+  "sourceLang": "French",
+  "targetLang": "English",
+  "cards": [
+    {
+      "id": 1,
+      "word": "bonjour",
+      "type": "n",
+      "translation": "hello",
+      "example": "Bonjour, comment ça va ?",
+      "range_count": 100,
+      "frequency": 50000
+    },
+    {
+      "id": 2,
+      "word": "merci",
+      "type": "n",
+      "translation": "thank you",
+      "example": "Merci beaucoup pour votre aide.",
+      "range_count": 100,
+      "frequency": 45000
+    },
+    {
+      "id": 3,
+      "word": "au revoir",
+      "type": "phrase",
+      "translation": "goodbye",
+      "example": "Au revoir, à bientôt !",
+      "range_count": 100,
+      "frequency": 40000
+    },
+    {
+      "id": 4,
+      "word": "s'il vous plaît",
+      "type": "phrase",
+      "translation": "please",
+      "example": "Un café, s'il vous plaît.",
+      "range_count": 100,
+      "frequency": 38000
+    },
+    {
+      "id": 5,
+      "word": "pardon",
+      "type": "n",
+      "translation": "sorry/excuse me",
+      "example": "Pardon, où est la gare ?",
+      "range_count": 100,
+      "frequency": 35000
+    },
+    {
+      "id": 6,
+      "word": "je m'appelle",
+      "type": "phrase",
+      "translation": "my name is",
+      "example": "Je m'appelle Marie.",
+      "range_count": 100,
+      "frequency": 32000
+    },
+    {
+      "id": 7,
+      "word": "comment allez-vous",
+      "type": "phrase",
+      "translation": "how are you",
+      "example": "Bonjour, comment allez-vous aujourd'hui ?",
+      "range_count": 100,
+      "frequency": 30000
+    },
+    {
+      "id": 8,
+      "word": "bien",
+      "type": "adv",
+      "translation": "well/good",
+      "example": "Je vais bien, merci.",
+      "range_count": 100,
+      "frequency": 40000
+    },
+    {
+      "id": 9,
+      "word": "mauvais",
+      "type": "adj",
+      "translation": "bad",
+      "example": "C'est une mauvaise idée.",
+      "range_count": 100,
+      "frequency": 28000
+    },
+    {
+      "id": 10,
+      "word": "petit",
+      "type": "adj",
+      "translation": "small/little",
+      "example": "C'est un petit chien.",
+      "range_count": 100,
+      "frequency": 35000
+    },
+    {
+      "id": 11,
+      "word": "grand",
+      "type": "adj",
+      "translation": "big/tall",
+      "example": "C'est une grande maison.",
+      "range_count": 100,
+      "frequency": 33000
+    },
+    {
+      "id": 12,
+      "word": "aimer",
+      "type": "v",
+      "translation": "to like/love",
+      "example": "J'aime le chocolat.",
+      "range_count": 100,
+      "frequency": 30000
+    },
+    {
+      "id": 13,
+      "word": "parler",
+      "type": "v",
+      "translation": "to speak",
+      "example": "Je parle français un peu.",
+      "range_count": 100,
+      "frequency": 28000
+    },
+    {
+      "id": 14,
+      "word": "l'eau",
+      "type": "n",
+      "translation": "water",
+      "example": "Je voudrais de l'eau, s'il vous plaît.",
+      "range_count": 100,
+      "frequency": 32000
+    },
+    {
+      "id": 15,
+      "word": "manger",
+      "type": "v",
+      "translation": "to eat",
+      "example": "J'aime manger des croissants.",
+      "range_count": 100,
+      "frequency": 29000
+    },
+    {
+      "id": 16,
+      "word": "boire",
+      "type": "v",
+      "translation": "to drink",
+      "example": "Je vais boire un café.",
+      "range_count": 100,
+      "frequency": 27000
+    },
+    {
+      "id": 17,
+      "word": "maison",
+      "type": "n",
+      "translation": "house/home",
+      "example": "Je rentre à la maison.",
+      "range_count": 100,
+      "frequency": 31000
+    },
+    {
+      "id": 18,
+      "word": "jour",
+      "type": "n",
+      "translation": "day",
+      "example": "Bonne journée !",
+      "range_count": 100,
+      "frequency": 40000
+    },
+    {
+      "id": 19,
+      "word": "nuit",
+      "type": "n",
+      "translation": "night",
+      "example": "Bonne nuit, dors bien !",
+      "range_count": 100,
+      "frequency": 35000
+    },
+    {
+      "id": 20,
+      "word": "aujourd'hui",
+      "type": "adv",
+      "translation": "today",
+      "example": "Quel temps fait-il aujourd'hui ?",
+      "range_count": 100,
+      "frequency": 38000
+    }
+  ]
+}
