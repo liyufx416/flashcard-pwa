@@ -1,6 +1,8 @@
 # Flashcard PWA
 
-A Progressive Web Application for learning vocabulary through flashcards with spaced repetition and difficulty tracking.
+A [Progressive Web Application](https://d3vp78wfkpeym6.cloudfront.net/) for learning vocabulary through flashcards with spaced repetition and difficulty tracking.
+
+**[Credits](credits.md)**
 
 ## Features
 
@@ -304,4 +306,4 @@ The application has been fully migrated from localStorage to IndexedDB for impro
 
 ## License
 
-This project is open source and available for educational purposes.
+This project is open source and available for educational purposes with credit to the original author.
