@@ -1,6 +1,7 @@
 {
-  "name": "Language Flash Cards",
-  "short_name": "FlashCards",
+  "name": "Language Flash Card",
+  "short_name": "FlashCard",
+  "version": "1.0",
   "description": "A PWA for learning foreign language vocabulary",
   "start_url": "/flashcard-pwa/",
   "display": "standalone",

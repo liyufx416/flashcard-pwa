@@ -1,5 +1,6 @@
 import dataSyncService from '../services/dataSyncService.js';
 import speechService from '../utils/speechService.js';
+import AppInfoModal from '../utils/appInfoModal.js';
 
 class WelcomeScreen {
   constructor(container, onStartStudy, onManageCards) {
@@ -235,7 +236,7 @@ class WelcomeScreen {
         <header class="app-header">
           <div class="header-placeholder"></div>
           <div class="header-content">
-            <h1>FlashCard</h1>
+            <h1 class="app-title clickable">FlashCard</h1>
           </div>
           <div class="header-placeholder"></div>
         </header>
@@ -358,6 +359,7 @@ class WelcomeScreen {
     const timePeriodButtons = this.container.querySelectorAll('.time-period-btn');
     const testSpeechBtn = this.container.querySelector('#test-speech');
     const clearApiKeyBtn = this.container.querySelector('#clear-api-key');
+    const appTitle = this.container.querySelector('.app-title');
 
     if (reverseDirection) {
       const savedReverseDirection = localStorage.getItem('reverseDirection');
@@ -530,6 +532,13 @@ class WelcomeScreen {
           this.updateSpeechStatus();
           alert('API key cleared successfully');
         }
+      });
+    }
+
+    // Add click listener for app title
+    if (appTitle) {
+      appTitle.addEventListener('click', () => {
+        AppInfoModal.show();
       });
     }
   }

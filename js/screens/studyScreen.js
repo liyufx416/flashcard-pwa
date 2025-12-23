@@ -1,5 +1,6 @@
 import dataSyncService from '../services/dataSyncService.js';
 import speechService from '../utils/speechService.js';
+import AppInfoModal from '../utils/appInfoModal.js';
 
 class StudyScreen {
   constructor(container, languagePairId, reverseDirection, onBack) {
@@ -157,7 +158,7 @@ class StudyScreen {
             </svg>
           </button>
           <div class="header-content">
-            <h1>FlashCard</h1>
+            <h1 class="app-title clickable">FlashCard</h1>
           </div>
           <div class="language-pair">${languagePairName}</div>
         </header>
@@ -249,6 +250,7 @@ class StudyScreen {
     const speakerBtns = this.container.querySelectorAll('.speaker-btn');
     const prevBtn = this.container.querySelector('#prev-btn');
     const nextBtn = this.container.querySelector('#next-btn');
+    const appTitle = this.container.querySelector('.app-title');
 
     if (flashcard) {
       flashcard.addEventListener('click', (e) => {
@@ -294,6 +296,13 @@ class StudyScreen {
 
     if (backBtn) {
       backBtn.addEventListener('click', () => this.onBack());
+    }
+
+    // Add click listener for app title
+    if (appTitle) {
+      appTitle.addEventListener('click', () => {
+        AppInfoModal.show();
+      });
     }
   }
 
