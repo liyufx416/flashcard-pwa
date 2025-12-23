@@ -210,9 +210,29 @@ class StudyScreen {
           
           <div class="card-actions">
             <div class="difficulty-buttons">
-              <button class="difficulty-btn easy" data-difficulty="1">Easy</button>
-              <button class="difficulty-btn medium" data-difficulty="2">Medium</button>
-              <button class="difficulty-btn hard" data-difficulty="3">Hard</button>
+              <button class="difficulty-btn easy ${currentCard.stats?.difficulty === 1 ? 'active' : ''}" data-difficulty="1">
+                <span class="btn-text">Easy</span>
+              </button>
+              <button class="difficulty-btn medium ${currentCard.stats?.difficulty === 2 ? 'active' : ''}" data-difficulty="2">
+                <span class="btn-text">Medium</span>
+              </button>
+              <button class="difficulty-btn hard ${currentCard.stats?.difficulty === 3 ? 'active' : ''}" data-difficulty="3">
+                <span class="btn-text">Hard</span>
+              </button>
+            </div>
+            <div class="navigation-buttons">
+              <button class="nav-btn prev-btn" id="prev-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                <span class="btn-text">Previous</span>
+              </button>
+              <button class="nav-btn next-btn" id="next-btn">
+                <span class="btn-text">Next</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -227,11 +247,16 @@ class StudyScreen {
     const difficultyBtns = this.container.querySelectorAll('.difficulty-btn');
     const backBtn = this.container.querySelector('#back-btn');
     const speakerBtns = this.container.querySelectorAll('.speaker-btn');
+    const prevBtn = this.container.querySelector('#prev-btn');
+    const nextBtn = this.container.querySelector('#next-btn');
 
     if (flashcard) {
       flashcard.addEventListener('click', (e) => {
-        if (!e.target.closest('.speaker-btn')) {
-          this.toggleCard();
+        const yesBtn = document.querySelector('#prompt-yes');
+        if (!yesBtn) {
+          if (!e.target.closest('.speaker-btn') && !e.target.closest('.difficulty-btn') && !e.target.closest('.nav-btn')) {
+            this.toggleCard();
+          }
         }
       });
     }
@@ -247,10 +272,25 @@ class StudyScreen {
 
     difficultyBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const difficulty = parseInt(e.target.dataset.difficulty);
+        e.stopPropagation();
+        const difficulty = parseInt(e.currentTarget.dataset.difficulty);
         this.handleDifficulty(difficulty);
       });
     });
+
+    if (prevBtn) {
+      prevBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.handlePrevious();
+      });
+    }
+
+    if (nextBtn) {
+      nextBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.handleNext();
+      });
+    }
 
     if (backBtn) {
       backBtn.addEventListener('click', () => this.onBack());
@@ -269,42 +309,160 @@ class StudyScreen {
     const currentCard = this.cards[this.currentCardIndex];
     
     try {
+      currentCard.stats.difficulty = difficulty;
+      const difficultyBtns = this.container.querySelectorAll('.difficulty-btn');
+      difficultyBtns.forEach(btn => {
+        btn.classList.remove('active');
+        if (difficulty === parseInt(btn.dataset.difficulty)) {
+          btn.classList.add('active');
+        }
+      });
       await dataSyncService.updateCardProgress(this.languagePairId, currentCard.word, difficulty);
     } catch (error) {
       console.error('Error updating card progress:', error);
     }
     
     // Move to the next card
-    this.currentCardIndex++;
-    this.isFlipped = false;
+    this.handleNext();
+  }
+
+  showFirstCardPrompt() {
+    const flashcard = this.container.querySelector('#flashcard');
+    const cardContent = flashcard.querySelector('.card-content');
     
-    if (this.currentCardIndex < this.cards.length) {
-      this.render();
-    } else {
-      // All cards reviewed
-      this.container.innerHTML = `
-        <div class="study-container">
-          <h2>Great job!</h2>
-          <p>You've reviewed all the cards.</p>
-          <button id="restart-btn" class="btn btn-primary">Start Over</button>
-          <button id="back-btn" class="btn btn-secondary">Back to Menu</button>
+    // Disable navigation and difficulty buttons
+    this.disableNavigationButtons(true);
+    
+    // Disable flip functionality by adding a class
+    flashcard.classList.remove('flipped');
+    
+    // Replace card content with prompt
+    cardContent.innerHTML = `
+      <div class="prompt-card">
+        <h3>This is the first card to review</h3>
+        <p>Do you wish to move to the last card of the pile?</p>
+        <div class="prompt-buttons">
+          <button class="btn btn-primary" id="prompt-yes">Yes</button>
+          <button class="btn" id="prompt-no">No</button>
         </div>
-      `;
+      </div>
+    `;
+    
+    // Add event listeners for prompt buttons
+    const yesBtn = cardContent.querySelector('#prompt-yes');
+    const noBtn = cardContent.querySelector('#prompt-no');
+    
+    yesBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.animateCardTransition(this.cards.length - 1);
+      this.disableNavigationButtons(false);
+    });
+    
+    noBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.isFlipped = false;
+      flashcard.classList.remove('flipped');
+      this.render(); // Just re-render the current card
+      this.disableNavigationButtons(false);
+    });
+  }
+
+  showLastCardPrompt() {
+    const flashcard = this.container.querySelector('#flashcard');
+    const cardContent = flashcard.querySelector('.card-content');
+    
+    // Disable navigation and difficulty buttons
+    this.disableNavigationButtons(true);
+    
+    // Disable flip functionality by adding a class
+    flashcard.classList.remove('flipped');
+    
+    // Replace card content with prompt
+    cardContent.innerHTML = `
+      <div class="prompt-card">
+        <h3>You have completed reviewing the cards</h3>
+        <p>Do you wish to move to the first card of the pile?</p>
+        <div class="prompt-buttons">
+          <button class="btn btn-primary" id="prompt-yes">Yes</button>
+          <button class="btn" id="prompt-no">No</button>
+        </div>
+      </div>
+    `;
+    
+    // Add event listeners for prompt buttons
+    const yesBtn = cardContent.querySelector('#prompt-yes');
+    const noBtn = cardContent.querySelector('#prompt-no');
+    
+    yesBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.animateCardTransition(0);
+      this.disableNavigationButtons(false);
+    });
+    
+    noBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.isFlipped = false;
+      flashcard.classList.remove('flipped');
+      this.render();
+      this.disableNavigationButtons(false);
+    });
+  }
+
+  disableNavigationButtons(disabled) {
+    const prevBtn = this.container.querySelector('#prev-btn');
+    const nextBtn = this.container.querySelector('#next-btn');
+    const difficultyBtns = this.container.querySelectorAll('.difficulty-btn');
+    
+    if (prevBtn) prevBtn.disabled = disabled;
+    if (nextBtn) nextBtn.disabled = disabled;
+    difficultyBtns.forEach(btn => btn.disabled = disabled);
+  }
+
+  // Add this method to your StudyScreen class
+  async animateCardTransition(nextCard = 0) {
+    const flashcard = this.container.querySelector('#flashcard');
+    if (!flashcard) return;
+    // Add flip-out animation
+    flashcard.classList.add('flip-out');
+    
+    // Wait for the flip-out animation to complete
+    await new Promise(resolve => {
+      flashcard.addEventListener('animationend', resolve, { once: true });
+    });
+    // Update the card content
+    this.currentCardIndex = nextCard;
+    
+    // Re-render the card
+    this.isFlipped = false;
+    this.render();
+    
+    // Get the new flashcard element
+    const newFlashcard = this.container.querySelector('#flashcard');
+    if (newFlashcard) {
+      // Add flip-in animation
+      newFlashcard.classList.add('flip-in');
       
-      const restartBtn = this.container.querySelector('#restart-btn');
-      const backBtn = this.container.querySelector('#back-btn');
-      
-      if (restartBtn) {
-        restartBtn.addEventListener('click', () => {
-          this.currentCardIndex = 0;
-          this.shuffleCards();
-          this.render();
-        });
-      }
-      
-      if (backBtn) {
-        backBtn.addEventListener('click', () => this.onBack());
-      }
+      // Clean up the animation classes after completion
+      newFlashcard.addEventListener('animationend', () => {
+        newFlashcard.classList.remove('flip-in');
+      }, { once: true });
+    }
+  }
+
+  // Update the handleNext and handlePrevious methods to use the new animation
+  handlePrevious() {
+    if (this.currentCardIndex === 0) {
+      this.showFirstCardPrompt();
+    } else {
+      this.animateCardTransition(this.currentCardIndex-1);
+    }
+  }
+
+  handleNext() {
+    if (this.currentCardIndex === this.cards.length - 1) {
+      this.showLastCardPrompt();
+    } else {
+      this.animateCardTransition(this.currentCardIndex+1);
     }
   }
 }

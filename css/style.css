@@ -1002,6 +1002,7 @@ p {
   perspective: 1000px;
   border-radius: var(--border-radius);
   transition: transform 0.3s ease;
+  transform-style: preserve-3d;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -1092,6 +1093,24 @@ p {
 
 .flashcard.flipped .card-back {
   transform: rotateY(0deg);
+}
+
+/* Add these to your style.css */
+@keyframes flipOutX {
+  from { transform: rotateX(0deg); }
+  to { transform: rotateX(90deg); opacity: 0; }
+}
+@keyframes flipInX {
+  from { transform: rotateX(-90deg); opacity: 0; }
+  to { transform: rotateX(0deg); opacity: 1; }
+}
+/* Add these classes to control the animations */
+.flip-out {
+  animation: flipOutX 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.flip-in {
+  animation: flipInX 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards;
+  opacity: 0;
 }
 
 .hint {
@@ -1196,33 +1215,7 @@ p {
   margin-bottom: 0.25rem;
 }
 
-.difficulty-btn.easy {
-  color: green;
-  border-color: #A7F3D0;
-  background-color: #ECFDF5;
-}
-
-.difficulty-btn.medium {
-  color: #F59E0B;
-  border-color: #FDE68A;
-  background-color: #FFFBEB;
-}
-
-.difficulty-btn.hard {
-  color: #EF4444;
-  border-color: #FCA5A5;
-  background-color: #FEF2F2;
-}
-
-.difficulty-btn:active:not(:disabled) {
-  transform: translateY(1px);
-}
-
-.difficulty-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
+/* Difficulty button colors are now handled by the active state */
 .difficulty-btn.easy::before {
   content: '😊';
 }
@@ -1233,6 +1226,152 @@ p {
 
 .difficulty-btn.hard::before {
   content: '😓';
+}
+
+.difficulty-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.difficulty-btn.easy.active {
+  color: darkgreen;
+  border-color: #A7F3D0;
+  background-color: #dbffee;
+}
+
+.difficulty-btn.medium.active {
+  color: #F59E0B;
+  border-color: #FDE68A;
+  background-color: #fff8da;
+}
+
+.difficulty-btn.hard.active {
+  color: red;
+  border-color: #FCA5A5;
+  background-color: #feebeb;
+}
+
+.difficulty-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Navigation buttons */
+.navigation-buttons {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.nav-btn {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.nav-btn .btn-text {
+  font-weight: 500;
+}
+
+.nav-btn:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.nav-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Prevent flip for prompt cards */
+.flashcard.no-flip {
+  pointer-events: none;
+}
+
+.flashcard.no-flip .card-content {
+  pointer-events: auto;
+}
+
+/* Prompt card styles */
+.prompt-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+  height: 100%;
+}
+
+.prompt-card h3 {
+  color: var(--primary-dark);
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.prompt-card p {
+  color: var(--primary-color);
+  font-size: 1rem;
+  margin-bottom: 2rem;
+  line-height: 1.5;
+}
+
+.prompt-buttons {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.prompt-buttons .btn {
+  min-width: 100px;
+  padding: 0.75rem 1.5rem;
+}
+
+/* Skip button styles (keeping for reference if needed) */
+.skip-btn {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.skip-btn .btn-text {
+  font-weight: 500;
+}
+
+.skip-btn:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.skip-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
 /* Progress */
