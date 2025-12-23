@@ -1195,6 +1195,17 @@ p {
   background-color: var(--primary-light);
 }
 
+.btn-secondary-white-bg {
+  background-color: var(--primary-light);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.btn-secondary-white-bg:hover:not(:disabled) {
+  background-color: var(--primary-color);
+}
+
 .difficulty-btn {
   flex: 1;
   padding: 0.75rem 0.5rem;

@@ -343,7 +343,7 @@ class StudyScreen {
         <p>Do you wish to move to the last card of the pile?</p>
         <div class="prompt-buttons">
           <button class="btn btn-primary" id="prompt-yes">Yes</button>
-          <button class="btn" id="prompt-no">No</button>
+          <button class="btn btn-secondary-white-bg" id="prompt-no">No</button>
         </div>
       </div>
     `;
@@ -384,7 +384,7 @@ class StudyScreen {
         <p>Do you wish to move to the first card of the pile?</p>
         <div class="prompt-buttons">
           <button class="btn btn-primary" id="prompt-yes">Yes</button>
-          <button class="btn" id="prompt-no">No</button>
+          <button class="btn btn-secondary-white-bg" id="prompt-no">No</button>
         </div>
       </div>
     `;
