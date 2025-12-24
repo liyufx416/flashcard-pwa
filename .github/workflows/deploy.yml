@@ -1,35 +1,159 @@
-name: Deploy to S3 and Invalidate CloudFront (using OIDC)
+name: Deploy to S3 (Auto-Versioning to 'deploy' branch)
 
 on:
   push:
     branches:
-      - main # Or your default branch like 'master'
+      - main # Trigger when changes are pushed to main
 
-# Permissions required for OIDC.
-# id-token: write is crucial for the GHA to fetch an OIDC token.
-# contents: read is needed to checkout the repository.
+# Permissions required for OIDC (id-token) and for writing to the repo (contents).
+# 'contents: write' is crucial for the Git push operations.
 permissions:
   id-token: write
-  contents: read
+  contents: write
 
 jobs:
-  deploy:
+  version-and-deploy:
     runs-on: ubuntu-latest
     env:
-      AWS_S3_BUCKET: flashcard-416 
-      AWS_CLOUDFRONT_DISTRIBUTION_ID: E11VHGRLHJ12TV
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.AWS_CF_DISTRIBUTION_ID}}
+      DEPLOY_BRANCH: deploy # The branch used for versioning and deployment
+      MAIN_BRANCH: main     # The main development branch
 
     steps:
-      - name: Checkout repository
+      - name: Configure Git for the bot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Checkout or Create Deploy Branch
         uses: actions/checkout@v3
+        with:
+          # Attempt to checkout the deploy branch. If it doesn't exist remotely,
+          # actions/checkout will default to checking out the triggering branch (main).
+          # We need to fetch all history for merging and branch creation.
+          ref: ${{ env.DEPLOY_BRANCH }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Handle Deploy Branch Existence and Merge from Main
+        run: |
+          # Check if the deploy branch exists remotely
+          DEPLOY_BRANCH_EXISTS=$(git ls-remote --heads origin ${{ env.DEPLOY_BRANCH }} | wc -l)
+
+          if [ "$DEPLOY_BRANCH_EXISTS" -eq 0 ]; then
+            echo "Deploy branch does not exist on remote. Creating it from '${{ env.MAIN_BRANCH }}' and pushing."
+            # If actions/checkout couldn't find deploy, it checked out main.
+            # So, create new deploy branch from current HEAD (which is main's latest state).
+            git checkout -b ${{ env.DEPLOY_BRANCH }}
+            git push -u origin ${{ env.DEPLOY_BRANCH }}
+            echo "Successfully created and pushed new deploy branch."
+            NO_MERGE_NEEDED="true" # Flag to skip merging main into deploy for the very first creation
+          else
+            echo "Deploy branch exists. Switching to it and preparing to merge '${{ env.MAIN_BRANCH }}'."
+            git checkout ${{ env.DEPLOY_BRANCH }}
+            git pull origin ${{ env.DEPLOY_BRANCH }} # Ensure local deploy is up-to-date with remote deploy
+            NO_MERGE_NEEDED="false"
+          fi
+
+          # Only attempt merge if deploy branch already existed
+          if [ "$NO_MERGE_NEEDED" != "true" ]; then
+            echo "Merging latest changes from '${{ env.MAIN_BRANCH }}' into '${{ env.DEPLOY_BRANCH }}'."
+            git fetch origin ${{ env.MAIN_BRANCH }}:${{ env.MAIN_BRANCH }} # Fetch main to merge from it
+            
+            # Attempt merge. If conflicts occur, resolve by preferring 'main's version.
+            # We use --no-commit to handle conflicts in script before committing.
+            if git merge --no-ff --no-commit ${{ env.MAIN_BRANCH }}; then
+                echo "Merge completed without conflicts."
+                git commit -m "Merge branch '${{ env.MAIN_BRANCH }}' into ${{ env.DEPLOY_BRANCH }}"
+            else
+                echo "Merge resulted in conflicts. Resolving by preferring '${{ env.MAIN_BRANCH }}' for all conflicted files."
+                # Get list of conflicted files
+                CONFLICTED_FILES=$(git diff --name-only --diff-filter=U)
+                if [ -z "$CONFLICTED_FILES" ]; then
+                  echo "No conflicted files found, something is wrong with merge status. Committing existing changes."
+                  git commit -m "Merge branch '${{ env.MAIN_BRANCH }}' into ${{ env.DEPLOY_BRANCH }}"
+                else
+                  # For each conflicted file, checkout the version from the main branch (theirs in merge context)
+                  for file in $CONFLICTED_FILES; do
+                    echo "Resolving conflict in $file: Preferring '${{ env.MAIN_BRANCH }}' version."
+                    git checkout --theirs "$file" # 'theirs' refers to the branch being merged FROM (main)
+                    git add "$file"
+                  done
+                  # Commit the conflict resolution
+                  git commit -m "Merge branch '${{ env.MAIN_BRANCH }}' into ${{ env.DEPLOY_BRANCH }} (auto-resolved conflicts preferring main)"
+                fi
+            fi
+            git push origin ${{ env.DEPLOY_BRANCH }} # Push the merge commit
+          fi
+
+      - name: Get current date and format for credit.md
+        id: date
+        run: echo "RELEASE_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+
+      - name: Read current version, increment micro, and update credit.md
+        run: |
+          MANIFEST_PATH="./manifest.json"
+          if [ ! -f "$MANIFEST_PATH" ]; then
+            echo "Error: manifest.json not found at $MANIFEST_PATH"
+            exit 1
+          fi
+
+          # Read the version from the manifest.json (which is now from the 'deploy' branch after merge)
+          CURRENT_VERSION_FULL=$(jq -r '.version' "$MANIFEST_PATH")
+          
+          # Parse version parts. EXISTING_MICRO will be empty if version is "X.Y"
+          IFS='.' read -r -a VERSION_PARTS <<< "$CURRENT_VERSION_FULL"
+          MAJOR=${VERSION_PARTS[0]}
+          MINOR=${VERSION_PARTS[1]}
+          EXISTING_MICRO=${VERSION_PARTS[2]}
+
+          NEW_MICRO=0 # Default new micro version
+
+          # Logic to determine new micro version:
+          # If no micro version exists (e.g., from a main branch change), start at 0.
+          # Otherwise, increment the existing micro version.
+          if [ -z "$EXISTING_MICRO" ]; then
+            echo "Manifest.json version is '$CURRENT_VERSION_FULL' (without micro). Starting micro at 0."
+            NEW_MICRO=0
+          else
+            echo "Manifest.json version is '$CURRENT_VERSION_FULL' (with existing micro). Incrementing micro."
+            NEW_MICRO=$((EXISTING_MICRO + 1))
+          fi
+          
+          NEW_VERSION="$MAJOR.$MINOR.$NEW_MICRO"
+
+          echo "Old Version: $CURRENT_VERSION_FULL"
+          echo "New Version: $NEW_VERSION"
+
+          # Update manifest.json with the new version
+          jq ".version = \"$NEW_VERSION\"" "$MANIFEST_PATH" > temp_manifest.json && mv temp_manifest.json "$MANIFEST_PATH"
+          echo "Updated $MANIFEST_PATH to version $NEW_VERSION"
+
+          CREDIT_PATH="./credit.md"
+          if [ ! -f "$CREDIT_PATH" ]; then
+            echo "Error: credit.md not found at $CREDIT_PATH"
+            exit 1
+          fi
+          # Update credit.md with the new release date
+          sed -i "s/^Last Release Date: .*/Last Release Date: ${{ env.RELEASE_DATE }}/" "$CREDIT_PATH"
+          echo "Updated $CREDIT_PATH with date ${{ env.RELEASE_DATE }}"
+
+          # Set environment variable for the new version for potential use in commit message
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
+      - name: Commit version and date changes to deploy branch
+        run: |
+          git add manifest.json credit.md
+          # Only commit if there are actual changes (e.g., if version was bumped or date changed)
+          git commit -m "chore(deploy): Bump version to ${{ env.NEW_VERSION }} on ${{ env.RELEASE_DATE }}" || echo "No version bump changes to commit"
+          git push origin ${{ env.DEPLOY_BRANCH }}
 
       - name: Configure AWS Credentials (using OIDC)
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }} # Use the region secret
-          # The web-identity-token-file is automatically handled by the action when role-to-assume is used.
-          # No need to explicitly set web-identity-token-file: ${{ runner.temp }}/.github_actions_token
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }} # <<-- SETUP AS GITHUB SECRET
+          aws-region: ${{ secrets.AWS_REGION }}       # <<-- SETUP AS GITHUB SECRET
 
       - name: Sync files to S3
         run: |
@@ -37,12 +161,15 @@ jobs:
             --delete \
             --exclude ".git/*" \
             --exclude ".github/*" \
-            --exclude "node_modules/*" # Add any other exclusions as needed
+            --exclude "node_modules/*" \
+            --exclude "package*.json" \
+            --exclude "README.md" \
+            --exclude "credit.md" # Consider if you want credit.md on S3
           echo "Successfully synced files to S3 bucket: ${{ env.AWS_S3_BUCKET }}"
 
       - name: Create CloudFront Invalidation
         run: |
           aws cloudfront create-invalidation \
             --distribution-id ${{ env.AWS_CLOUDFRONT_DISTRIBUTION_ID }} \
-            --paths "/*" # Invalidate all paths. Use specific paths if needed, e.g., "/index.html"
+            --paths "/*" # Invalidate all paths. Adjust if you have specific invalidation needs.
           echo "Successfully initiated CloudFront invalidation for distribution: ${{ env.AWS_CLOUDFRONT_DISTRIBUTION_ID }}"
