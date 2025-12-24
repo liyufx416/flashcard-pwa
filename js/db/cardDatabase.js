@@ -105,7 +105,7 @@ class CardDatabase {
     card.stats = card.stats || {};
     card.stats.difficulty = difficulty;
     card.stats.lastReviewed = lastReviewed;
-    card.stats.reviewCount = (card.stats.reviewCount || 0) + 1;
+    card.stats.reviewCount = lastReviewed? (card.stats.reviewCount || 0) + 1 : 0;
     
     return this.saveCard(languagePair, card);
   }
@@ -173,7 +173,8 @@ class CardDatabase {
     
     return cards.filter(card => {
       const difficulty = card.stats?.difficulty;
-      if (difficulties.includes('new') && (difficulty === null || difficulty === undefined)) {
+      const lastReviewed = card.stats?.lastReviewed;
+      if (difficulties.includes('new') && (difficulty === null || difficulty === undefined || lastReviewed === undefined || lastReviewed === null)) {
         return true;
       }
       if (difficulties.includes('easy') && difficulty === 1) {
@@ -208,7 +209,8 @@ class CardDatabase {
     
     cards.forEach(card => {
       const difficulty = card.stats?.difficulty;
-      if (difficulty === null || difficulty === undefined) {
+      const lastReviewed = card.stats?.lastReviewed;
+      if (difficulty === null || difficulty === undefined || lastReviewed === undefined || lastReviewed === null) {
         counts.new++;
       } else if (difficulty === 1) {
         counts.easy++;
@@ -275,8 +277,10 @@ class CardDatabase {
     }
     
     return cards.filter(card => {
-      const difficulty = card.stats?.difficulty;
-      if (difficulties.includes('new') && (difficulty === null || difficulty === undefined)) {
+      const lastReviewed = card.stats?.lastReviewed;
+      const difficulty = lastReviewed? card.stats?.difficulty : null;
+      
+      if (difficulties.includes('new') && (difficulty === null || difficulty === undefined )) {
         return true;
       }
       if (difficulties.includes('easy') && difficulty === 1) {

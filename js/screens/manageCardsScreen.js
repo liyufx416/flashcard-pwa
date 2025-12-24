@@ -49,56 +49,58 @@ class ManageCardsScreen {
             </svg>
           </button>
           <div class="header-content">
-            <h1>Flashcard App</h1>
+            <h1>FlashCard</h1>
           </div>
           <div class="language-pair">${languagePairName}</div>
         </header>
 
-        <div class="manage-actions">
-          <button id="add-card-btn" class="btn btn-primary" ${!this.selectedLanguagePair ? 'disabled' : ''}>
-            Add New Card
-          </button>
-        </div>
-        
-        <div id="card-list-container">
-          <!-- Card list will be rendered here -->
-        </div>
+        <div class="screen-content">
+          <div class="manage-actions">
+            <button id="add-card-btn" class="btn btn-primary" ${!this.selectedLanguagePair ? 'disabled' : ''}>
+              Add New Card
+            </button>
+          </div>
+          
+          <div id="card-list-container">
+            <!-- Card list will be rendered here -->
+          </div>
 
-        <!-- Modal for adding/editing cards -->
-        <div id="card-modal" class="modal">
-          <div class="modal-content">
-            <span class="close-btn">&times;</span>
-            <h2 id="modal-title">Add New Card</h2>
-            <form id="card-form">
-              <div class="form-group">
-                <label for="word-text">Word (Source Language)</label>
-                <input type="text" id="word-text" required>
-              </div>
-              <div class="form-group">
-                <label for="type-text">Type (e.g., v, nm, nf, adj, adv)</label>
-                <input type="text" id="type-text" required>
-              </div>
-              <div class="form-group">
-                <label for="translation-text">Translation (Target Language)</label>
-                <input type="text" id="translation-text" required>
-              </div>
-              <div class="form-group">
-                <label for="example-text">Example (Optional)</label>
-                <textarea id="example-text" rows="3"></textarea>
-              </div>
-              <div class="form-group">
-                <label for="difficulty">Difficulty</label>
-                <select id="difficulty" required>
-                  <option value="1">Easy</option>
-                  <option value="2">Medium</option>
-                  <option value="3">Hard</option>
-                </select>
-              </div>
-              <div class="form-actions">
-                <button type="button" id="cancel-btn" class="btn btn-secondary">Cancel</button>
-                <button type="submit" class="btn btn-primary">Save</button>
-              </div>
-            </form>
+          <!-- Modal for adding/editing cards -->
+          <div id="card-modal" class="modal">
+            <div class="modal-content">
+              <span class="close-btn">&times;</span>
+              <h2 id="modal-title">Add New Card</h2>
+              <form id="card-form">
+                <div class="form-group">
+                  <label for="word-text">Word (Source Language)</label>
+                  <input type="text" id="word-text" required>
+                </div>
+                <div class="form-group">
+                  <label for="type-text">Type (e.g., v, nm, nf, adj, adv)</label>
+                  <input type="text" id="type-text" required>
+                </div>
+                <div class="form-group">
+                  <label for="translation-text">Translation (Target Language)</label>
+                  <input type="text" id="translation-text" required>
+                </div>
+                <div class="form-group">
+                  <label for="example-text">Example (Optional)</label>
+                  <textarea id="example-text" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="difficulty">Difficulty</label>
+                  <select id="difficulty" required>
+                    <option value="1">Easy</option>
+                    <option value="2">Medium</option>
+                    <option value="3">Hard</option>
+                  </select>
+                </div>
+                <div class="form-actions">
+                  <button type="button" id="cancel-btn" class="btn btn-secondary">Cancel</button>
+                  <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       </div>

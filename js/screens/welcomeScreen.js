@@ -1,5 +1,6 @@
 import dataSyncService from '../services/dataSyncService.js';
 import speechService from '../utils/speechService.js';
+import AppInfoModal from '../utils/appInfoModal.js';
 
 class WelcomeScreen {
   constructor(container, onStartStudy, onManageCards) {
@@ -16,14 +17,107 @@ class WelcomeScreen {
     
     try {
       const filter = JSON.parse(savedTimeFilter);
-      // Only return filter if a period is selected
-      if (filter && filter.period) {
-        return filter;
-      }
+      return filter; // Return the filter even if no period is selected
     } catch (e) {
       console.error('Error parsing time filter:', e);
     }
     return null;
+  }
+
+  async updateTimePeriodCounts() {
+    if (!this.selectedLanguagePair) return;
+
+    const timePeriodButtons = this.container.querySelectorAll('.time-period-btn');
+    if (!timePeriodButtons || timePeriodButtons.length === 0) return;
+
+    try {
+      // Get current difficulty filter settings
+      const difficultyFilters = this.getDifficultyFilters();
+      
+      // Get current time filter mode
+      const currentTimeFilter = this.getTimeFilter();
+      const mode = currentTimeFilter?.mode || 'only';
+      
+      // Get all time periods
+      const periods = ['week', 'month', 'quarter', 'year'];
+      
+      for (const period of periods) {
+        // Create time filter for each period with current mode
+        const timeFilter = { mode, period };
+        
+        // Load counts from IndexedDB with automatic sync and time filter
+        const counts = await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, timeFilter);
+        
+        // Calculate total count based on difficulty filters
+        const filteredCount =
+          (difficultyFilters.new ? counts.new : 0) +
+          (difficultyFilters.hard ? counts.hard : 0) +
+          (difficultyFilters.medium ? counts.medium : 0) +
+          (difficultyFilters.easy ? counts.easy : 0);
+        
+        // Find the button for this period and update its count
+        const btn = Array.from(timePeriodButtons).find(b => b.dataset.period === period);
+        if (btn) {
+          const countSpan = btn.querySelector('.count');
+          if (countSpan) {
+            countSpan.textContent = filteredCount;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error updating time period counts:', error);
+    }
+  }
+
+  getDifficultyFilters() {
+    const defaultDifficultyFilters = {
+      new: true,
+      hard: true,
+      medium: false,
+      easy: false,
+    };
+
+    let difficultyFilters = defaultDifficultyFilters;
+    const savedDifficultyFilters = localStorage.getItem('difficultyFilters');
+    if (savedDifficultyFilters) {
+      try {
+        const parsed = JSON.parse(savedDifficultyFilters);
+        difficultyFilters = {
+          ...defaultDifficultyFilters,
+          ...parsed,
+        };
+      } catch (e) {
+        difficultyFilters = defaultDifficultyFilters;
+      }
+    }
+    return difficultyFilters;
+  }
+
+  async updateStats() {
+    if (!this.selectedLanguagePair) return;
+
+    const totalWordsEl = this.container.querySelector('#total-words');
+    const masteredWordsEl = this.container.querySelector('#mastered-words');
+
+    if (!totalWordsEl || !masteredWordsEl) return;
+
+    try {
+      // Get counts without any filters
+      const counts = await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null);
+      
+      // Total words is sum of all difficulties
+      const totalWords = counts.new + counts.hard + counts.medium + counts.easy;
+      
+      // Mastered words are those marked as easy
+      const masteredWords = counts.easy;
+      
+      totalWordsEl.textContent = totalWords;
+      masteredWordsEl.textContent = masteredWords;
+    } catch (error) {
+      console.error('Error updating stats:', error);
+      totalWordsEl.textContent = '0';
+      masteredWordsEl.textContent = '0';
+    }
   }
 
   async updateDifficultyCounts() {
@@ -35,18 +129,18 @@ class WelcomeScreen {
     const startStudyBtn = this.container.querySelector('#start-study');
 
     try {
-      // Get time filter settings
-      const timeFilter = this.getTimeFilter();
-      
       // Load counts from IndexedDB with automatic sync and time filter
-      const counts = await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, timeFilter);
+      const counts = await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null);
 
       buttons.forEach((btn) => {
         const key = btn.dataset.filter;
         const label = btn.dataset.label;
         if (!key || !label) return;
         const count = counts[key] ?? 0;
-        btn.textContent = `${label} (${count})`;
+        const countSpan = btn.querySelector('.count');
+        if (countSpan) {
+          countSpan.textContent = count;
+        }
       });
 
       const defaultDifficultyFilters = {
@@ -70,12 +164,24 @@ class WelcomeScreen {
         }
       }
 
-      const filteredCount =
-        (difficultyFilters.new ? counts.new : 0) +
-        (difficultyFilters.hard ? counts.hard : 0) +
-        (difficultyFilters.medium ? counts.medium : 0) +
-        (difficultyFilters.easy ? counts.easy : 0);
+      // Also update time period counts
+      this.updateTimePeriodCounts();
+      
+      // Update stats
+      this.updateStats();
 
+      // Get counts with time filter applied
+      const timeFilter = this.getTimeFilter();
+      const timeFilteredCounts = timeFilter 
+        ? await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, timeFilter)
+        : counts;
+
+      // Calculate filtered count based on both difficulty and time filters
+      const filteredCount =
+        (difficultyFilters.new ? (timeFilteredCounts.new || 0) : 0) +
+        (difficultyFilters.hard ? (timeFilteredCounts.hard || 0) : 0) +
+        (difficultyFilters.medium ? (timeFilteredCounts.medium || 0) : 0) +
+        (difficultyFilters.easy ? (timeFilteredCounts.easy || 0) : 0);
       if (startStudyBtn) {
         startStudyBtn.disabled = !this.selectedLanguagePair || filteredCount === 0;
       }
@@ -130,15 +236,15 @@ class WelcomeScreen {
         <header class="app-header">
           <div class="header-placeholder"></div>
           <div class="header-content">
-            <h1>Flashcard App</h1>
+            <h1 class="app-title clickable">FlashCard</h1>
           </div>
           <div class="header-placeholder"></div>
         </header>
-        <div class="welcome-content">
-          <h2>Welcome to Flashcard App</h2>
+        <div class="screen-content">
+          <p><b>Master vocabularies of foreign languages with FlashCard App</b></p>
           <div class="language-selector">
             <div class="language-selector-row">
-              <label for="language-pair">Select Language Pair:</label>
+              <label for="language-pair">Language Pair</label>
               <div class="direction-toggle">
                 <label class="toggle-switch">
                   <input type="checkbox" id="reverse-direction" ${reverseDirectionChecked ? 'checked' : ''}>
@@ -155,11 +261,35 @@ class WelcomeScreen {
               ).join('')}
             </select>
           </div>
+          <div class="stats-section">
+            <div class="stats-content">
+              <div class="stat-item">
+                <span class="stat-value" id="total-words">0</span>
+                <span class="stat-label">Total Card</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value-mastered" id="mastered-words">0</span>
+                <span class="stat-label">Mastered</span>
+              </div>
+            </div>
+          </div>
           <div class="difficulty-filters" role="group" aria-label="Difficulty Filters">
-            <button type="button" class="difficulty-filter-btn ${difficultyFilters.new ? 'active' : ''}" data-filter="new" data-label="New" aria-pressed="${difficultyFilters.new}">New</button>
-            <button type="button" class="difficulty-filter-btn ${difficultyFilters.hard ? 'active' : ''}" data-filter="hard" data-label="Hard" aria-pressed="${difficultyFilters.hard}">Hard</button>
-            <button type="button" class="difficulty-filter-btn ${difficultyFilters.medium ? 'active' : ''}" data-filter="medium" data-label="Medium" aria-pressed="${difficultyFilters.medium}">Medium</button>
-            <button type="button" class="difficulty-filter-btn ${difficultyFilters.easy ? 'active' : ''}" data-filter="easy" data-label="Easy" aria-pressed="${difficultyFilters.easy}">Easy</button>
+            <button type="button" class="difficulty-filter-btn ${difficultyFilters.new ? 'active' : ''}" data-filter="new" data-label="New" aria-pressed="${difficultyFilters.new}">
+              <span>New</span>
+              <span class="count">0</span>
+            </button>
+            <button type="button" class="difficulty-filter-btn ${difficultyFilters.hard ? 'active' : ''}" data-filter="hard" data-label="Hard" aria-pressed="${difficultyFilters.hard}">
+              <span>Hard</span>
+              <span class="count">0</span>
+            </button>
+            <button type="button" class="difficulty-filter-btn ${difficultyFilters.medium ? 'active' : ''}" data-filter="medium" data-label="Medium" aria-pressed="${difficultyFilters.medium}">
+              <span>Medium</span>
+              <span class="count">0</span>
+            </button>
+            <button type="button" class="difficulty-filter-btn ${difficultyFilters.easy ? 'active' : ''}" data-filter="easy" data-label="Easy" aria-pressed="${difficultyFilters.easy}">
+              <span>Easy</span>
+              <span class="count">0</span>
+            </button>
           </div>
           ${this.renderTimeFilter()}
           <div class="button-container">
@@ -191,17 +321,29 @@ class WelcomeScreen {
     return `
       <div class="time-filter-section">
         <div class="time-filter-header">
-          <span class="time-filter-label">Last Reviewed:</span>
+          <span class="time-filter-label">Reviewed:</span>
           <div class="time-filter-toggle">
             <button type="button" class="time-mode-btn ${timeFilterMode === 'only' ? 'active' : ''}" data-mode="only">Only</button>
             <button type="button" class="time-mode-btn ${timeFilterMode === 'not' ? 'active' : ''}" data-mode="not">Not</button>
           </div>
         </div>
         <div class="time-period-filters" role="group" aria-label="Time Period Filters">
-          <button type="button" class="time-period-btn ${selectedPeriod === 'week' ? 'active' : ''}" data-period="week">Last Week</button>
-          <button type="button" class="time-period-btn ${selectedPeriod === 'month' ? 'active' : ''}" data-period="month">Last Month</button>
-          <button type="button" class="time-period-btn ${selectedPeriod === 'quarter' ? 'active' : ''}" data-period="quarter">Last Quarter</button>
-          <button type="button" class="time-period-btn ${selectedPeriod === 'year' ? 'active' : ''}" data-period="year">Last Year</button>
+          <button type="button" class="time-period-btn ${selectedPeriod === 'week' ? 'active' : ''}" data-period="week" data-label="Week">
+            <span>Week</span>
+            <span class="count">0</span>
+          </button>
+          <button type="button" class="time-period-btn ${selectedPeriod === 'month' ? 'active' : ''}" data-period="month" data-label="Month">
+            <span>Month</span>
+            <span class="count">0</span>
+          </button>
+          <button type="button" class="time-period-btn ${selectedPeriod === 'quarter' ? 'active' : ''}" data-period="quarter" data-label="Quarter">
+            <span>Quarter</span>
+            <span class="count">0</span>
+          </button>
+          <button type="button" class="time-period-btn ${selectedPeriod === 'year' ? 'active' : ''}" data-period="year" data-label="Year">
+            <span>Year</span>
+            <span class="count">0</span>
+          </button>
         </div>
       </div>
     `;
@@ -217,6 +359,7 @@ class WelcomeScreen {
     const timePeriodButtons = this.container.querySelectorAll('.time-period-btn');
     const testSpeechBtn = this.container.querySelector('#test-speech');
     const clearApiKeyBtn = this.container.querySelector('#clear-api-key');
+    const appTitle = this.container.querySelector('.app-title');
 
     if (reverseDirection) {
       const savedReverseDirection = localStorage.getItem('reverseDirection');
@@ -299,6 +442,9 @@ class WelcomeScreen {
           // Update counts if a period is selected
           if (currentFilter.period) {
             this.updateDifficultyCounts();
+          } else {
+            // If no period selected, still update time period counts to show "Only" vs "Not" mode
+            this.updateTimePeriodCounts();
           }
         });
       });
@@ -386,6 +532,13 @@ class WelcomeScreen {
           this.updateSpeechStatus();
           alert('API key cleared successfully');
         }
+      });
+    }
+
+    // Add click listener for app title
+    if (appTitle) {
+      appTitle.addEventListener('click', () => {
+        AppInfoModal.show();
       });
     }
   }
