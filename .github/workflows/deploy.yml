@@ -87,11 +87,11 @@ jobs:
             git push origin ${{ env.DEPLOY_BRANCH }} # Push the merge commit
           fi
 
-      - name: Get current date and format for credit.md
+      - name: Get current date and format for credits.md
         id: date
         run: echo "RELEASE_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
 
-      - name: Read current version, increment micro, and update credit.md
+      - name: Read current version, increment micro, and update credits.md
         run: |
           MANIFEST_PATH="./manifest.json"
           if [ ! -f "$MANIFEST_PATH" ]; then
@@ -130,12 +130,12 @@ jobs:
           jq ".version = \"$NEW_VERSION\"" "$MANIFEST_PATH" > temp_manifest.json && mv temp_manifest.json "$MANIFEST_PATH"
           echo "Updated $MANIFEST_PATH to version $NEW_VERSION"
 
-          CREDIT_PATH="./credit.md"
+          CREDIT_PATH="./credits.md"
           if [ ! -f "$CREDIT_PATH" ]; then
-            echo "Error: credit.md not found at $CREDIT_PATH"
+            echo "Error: credits.md not found at $CREDIT_PATH"
             exit 1
           fi
-          # Update credit.md with the new release date
+          # Update credits.md with the new release date
           sed -i "s/^Last Release Date: .*/Last Release Date: ${{ env.RELEASE_DATE }}/" "$CREDIT_PATH"
           echo "Updated $CREDIT_PATH with date ${{ env.RELEASE_DATE }}"
 
@@ -144,7 +144,7 @@ jobs:
 
       - name: Commit version and date changes to deploy branch
         run: |
-          git add manifest.json credit.md
+          git add manifest.json credits.md
           # Only commit if there are actual changes (e.g., if version was bumped or date changed)
           git commit -m "chore(deploy): Bump version to ${{ env.NEW_VERSION }} on ${{ env.RELEASE_DATE }}" || echo "No version bump changes to commit"
           git push origin ${{ env.DEPLOY_BRANCH }}
@@ -164,7 +164,6 @@ jobs:
             --exclude "node_modules/*" \
             --exclude "package*.json" \
             --exclude "README.md" \
-            --exclude "credit.md" # Consider if you want credit.md on S3
           echo "Successfully synced files to S3 bucket: ${{ env.AWS_S3_BUCKET }}"
 
       - name: Create CloudFront Invalidation
