@@ -163,7 +163,7 @@ jobs:
             --exclude ".github/*" \
             --exclude "node_modules/*" \
             --exclude "package*.json" \
-            --exclude "README.md" \
+            --exclude "README.md"
           echo "Successfully synced files to S3 bucket: ${{ env.AWS_S3_BUCKET }}"
 
       - name: Create CloudFront Invalidation
