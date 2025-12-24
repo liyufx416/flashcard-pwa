@@ -1,4 +1,4 @@
-name: Deploy to S3 (Auto-Versioning to 'deploy' branch)
+name: Deploy to S3 and invalidate CloudFront Distribution (Auto-Versioning to 'deploy' branch)
 
 on:
   push:
@@ -21,11 +21,6 @@ jobs:
       MAIN_BRANCH: main     # The main development branch
 
     steps:
-      - name: Configure Git for the bot
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
       - name: Checkout or Create Deploy Branch
         uses: actions/checkout@v3
         with:
@@ -35,6 +30,11 @@ jobs:
           ref: ${{ env.DEPLOY_BRANCH }}
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+
+      - name: Configure Git for the bot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Handle Deploy Branch Existence and Merge from Main
         run: |
