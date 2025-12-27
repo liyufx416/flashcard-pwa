@@ -176,6 +176,28 @@ jobs:
           git commit -m "chore(deploy): Bump version to ${{ env.NEW_VERSION }} on ${{ env.RELEASE_DATE }}" || echo "No version bump changes to commit"
           git push -u origin ${{ env.DEPLOY_BRANCH }}:${{ env.DEPLOY_DESTINATION_BRANCH }} --force # Force push the merge commit
 
+      - name: Debug OIDC Token Subject
+        id: debug_token_sub
+        shell: bash
+        run: |
+          # Get the OIDC token
+          OIDC_TOKEN=$(ACTIONS_RUNTIME_TOKEN="${{ secrets.ACTIONS_RUNTIME_TOKEN }}" \
+                     ACTIONS_RUNTIME_URL="${{ env.ACTIONS_RUNTIME_URL }}" \
+                     bash -c "curl -sS -H \"Authorization: Bearer \$ACTIONS_RUNTIME_TOKEN\" \
+                     \"\$ACTIONS_RUNTIME_URL/.oidc/request?audience=sts.amazonaws.com\"")
+          
+          # Extract the sub claim (requires jq)
+          # If jq is not installed, install it: sudo apt-get install -y jq
+          SUB_CLAIM=$(echo "$OIDC_TOKEN" | jq -r '.value' | cut -d'.' -f2 | base64 --decode | jq -r '.sub')
+          echo "OIDC Token Subject (sub): $SUB_CLAIM"
+
+          # IMPORTANT: Do NOT echo the raw token, it's a secret!
+          # You can echo the base64-decoded payload for more details if needed,
+          # but sub is usually enough.
+        # permissions:
+        #   id-token: write # Ensure this step has id-token: write permission
+        #  contents: read
+
       - name: Configure AWS Credentials (using OIDC)
         uses: aws-actions/configure-aws-credentials@v2
         with:
