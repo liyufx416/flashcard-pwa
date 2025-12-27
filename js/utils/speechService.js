@@ -291,27 +291,19 @@ class SpeechService {
     });
   }
 
-  // Remove existing ResponsiveVoice script
-  removeResponsiveVoiceScript() {
-    console.log('Removing existing ResponsiveVoice script...');
-    
-    // Remove script element
-    const existingScript = document.getElementById('responsivevoice-script');
-    if (existingScript) {
-      existingScript.remove();
+  // Test ResponsiveVoice API key
+  async testResponsiveVoiceKey(apiKey) {
+    console.log(`Testing ResponsiveVoice API key...`);
+    try {
+      // Test speaking with ResponsiveVoice
+      await this.speakWithResponsiveVoice('This sentence is read by ResponsiveVoice', 'en');
+      
+      console.log('ResponsiveVoice API key test successful');
+      return true;
+    } catch (error) {
+      console.error('ResponsiveVoice API key test failed:', error);
+      throw error;
     }
-    
-    // Clear global variables
-    if (typeof window.responsiveVoice !== 'undefined') {
-      delete window.responsiveVoice;
-    }
-    
-    // Reset state
-    this.scriptLoaded = false;
-    this.responsiveVoiceLoaded = false;
-    this.responsiveVoiceTemporarilyUnavailable = false;
-    
-    console.log('ResponsiveVoice script removed and state reset');
   }
 
   getVoiceForLanguage(languageCode) {
@@ -404,7 +396,7 @@ class SpeechService {
     
     if (!this.synth) {
       console.warn('Speech synthesis not supported');
-      return;
+      return 'local';
     }
     
     // Wait for voices to be loaded
@@ -413,43 +405,36 @@ class SpeechService {
       await this.voiceLoadPromise;
     }
 
+    // PREFER ResponsiveVoice when configured and working
+    if (this.useResponsiveVoice) {
+      console.log('ResponsiveVoice is configured, waiting for it to load...');
+      // Wait for ResponsiveVoice to be loaded
+      await this.responsiveVoicePromise;
+      
+      if (this.responsiveVoiceLoaded) {
+        console.log('ResponsiveVoice loaded, attempting to speak...');
+        try {
+          await this.speakWithResponsiveVoice(text, languageCode);
+          console.log('ResponsiveVoice speech completed successfully');
+          return 'responsive';
+        } catch (error) {
+          console.warn('ResponsiveVoice failed, falling back to local voice:', error.message);
+          // Continue to local voice fallback
+        }
+      } else {
+        console.warn('ResponsiveVoice temporarily unavailable, falling back to local voice');
+        // Continue to local voice fallback
+      }
+    }
+    
     // Check if language is supported locally
     const localSupport = this.isLanguageSupportedLocally(languageCode);
     console.log(`Local support for ${languageCode}:`, localSupport);
     
     if (!localSupport) {
-      console.log(`Language ${languageCode} not supported locally, trying ResponsiveVoice fallback`);
+      console.log(`Language ${languageCode} not supported locally and ResponsiveVoice unavailable`);
       
-      if (this.useResponsiveVoice) {
-        console.log('ResponsiveVoice is configured, waiting for it to load...');
-        // Wait for ResponsiveVoice to be loaded
-        await this.responsiveVoicePromise;
-        
-        if (this.responsiveVoiceLoaded) {
-          console.log('ResponsiveVoice loaded, attempting to speak...');
-          try {
-            await this.speakWithResponsiveVoice(text, languageCode);
-            console.log('ResponsiveVoice speech completed successfully');
-            return;
-          } catch (error) {
-            console.warn('ResponsiveVoice fallback failed, using default voice:', error.message);
-          }
-        } else {
-          console.warn('ResponsiveVoice temporarily unavailable');
-          // Show dialog for reconfiguration or local voice installation
-          const shouldRetry = await this.promptForApiKey(languageCode, true);
-          if (shouldRetry) {
-            console.log('User reconfigured ResponsiveVoice, retrying speech...');
-            // Wait a moment for the new ResponsiveVoice to be fully loaded
-            if (this.responsiveVoicePromise) {
-              await this.responsiveVoicePromise;
-            }
-            // Retry speaking with the reconfigured API key
-            await this.speak(text, languageCode);
-            return;
-          }
-        }
-      } else {
+      if (!this.useResponsiveVoice) {
         console.log('ResponsiveVoice not configured, showing prompt dialog...');
         // Show dialog to get API key or suggest local voice installation
         const shouldRetry = await this.promptForApiKey(languageCode, false);
@@ -460,10 +445,13 @@ class SpeechService {
             await this.responsiveVoicePromise;
           }
           // Retry speaking with the newly configured API key
-          await this.speak(text, languageCode);
-          return;
+          return await this.speak(text, languageCode);
         }
       }
+      
+      // If we get here, neither ResponsiveVoice nor local voice is available
+      console.warn('No speech synthesis available for this language');
+      return 'local';
     }
     
     // Use local speech synthesis
@@ -488,6 +476,7 @@ class SpeechService {
 
     console.log('Speaking with local synthesis...');
     this.synth.speak(utterance);
+    return 'local';
   }
 
   stop() {
@@ -537,25 +526,28 @@ class SpeechService {
       dialog.style.cssText = `
         background: white;
         padding: 2rem;
+        padding-top: 1rem;
         border-radius: 8px;
         max-width: 500px;
         width: 90%;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        position: relative;
       `;
 
       const languageName = this.getLanguageName(languageCode);
       const hasExistingKey = !!this.apiKey;
+      const backupKey = localStorage.getItem('responsiveVoiceApiKey_backup');
       
       let title, message, option2Text, placeholder, saveText;
       
       if (isReconfiguration) {
-        title = 'ResponsiveVoice Temporarily Unavailable';
-        message = `ResponsiveVoice service is temporarily unavailable for <strong>${languageName}</strong>. This may be due to network issues or service maintenance. You have two options:`;
+        title = 'Configure ResponsiveVoice';
+        message = `Configure ResponsiveVoice for <strong>${languageName}</strong> speech synthesis.`;
         option2Text = hasExistingKey ? 
           `Replace ResponsiveVoice API Key (current: ***${this.apiKey.slice(-4)})` : 
           `Enter ResponsiveVoice API Key`;
         placeholder = hasExistingKey ? 'Enter new API key (optional)' : 'Enter ResponsiveVoice API Key';
-        saveText = hasExistingKey ? 'Update & Retry' : 'Save & Retry';
+        saveText = hasExistingKey ? 'Update API Key' : 'Save API Key';
       } else {
         title = 'Voice Support Needed';
         message = `Your browser doesn't have local voice support for <strong>${languageName}</strong>. You have two options:`;
@@ -565,6 +557,7 @@ class SpeechService {
       }
       
       dialog.innerHTML = `
+        <button id="close-btn" style="position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; color: #666; cursor: pointer; padding: 0.25rem; line-height: 1;">×</button>
         <h3 style="margin-top: 0; color: #333;">${title}</h3>
         <p style="color: #666; line-height: 1.5;">
           ${message}
@@ -585,13 +578,13 @@ class SpeechService {
             <b>After you reconfigure the API Key the application will reload.</b>
           </p>
           <input type="password" id="api-key-input" placeholder="${placeholder}" 
-                 style="width: 100%; padding: 0.5rem; margin: 0.5rem 0; border: 1px solid #ddd; border-radius: 4px;">
-          ${hasExistingKey && !isReconfiguration ? `<small style="color: #666;">Current key: ***${this.apiKey.slice(-4)}</small>` : ''}
+                   style="width: 100%; padding: 0.5rem; margin: 0.5rem 0; border: 1px solid #ddd; border-radius: 4px; color: black;">
+          ${hasExistingKey ? `<div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;"><small style="color: #666; flex: 1;">Current key: ***${this.apiKey.slice(-4)}</small><button class="copy-key-btn" data-key="${this.apiKey}" style="background: none; border: none; color: #666; cursor: pointer; padding: 0.25rem; display: flex; align-items: center;" title="Copy full API key"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button></div>` : ''}
+          ${!hasExistingKey && backupKey ? `<div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;"><small style="color: #666; flex: 1;">Backup key available: ***${backupKey.slice(-4)}</small><button class="copy-key-btn" data-key="${backupKey}" style="background: none; border: none; color: #666; cursor: pointer; padding: 0.25rem; display: flex; align-items: center;" title="Copy full API key"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button></div>` : ''}
         </div>
-        <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.5rem;">
-          <button id="cancel-btn" style="padding: 0.5rem 1rem; border: 1px solid #ddd; background: #f5f5f5; border-radius: 4px; cursor: pointer;">Cancel</button>
-          <button id="skip-btn" style="padding: 0.5rem 1rem; border: 1px solid #ddd; background: #6c757d; color: white; border-radius: 4px; cursor: pointer;">Use Local Voice</button>
-          <button id="save-btn" style="padding: 0.5rem 1rem; border: none; background: #007bff; color: white; border-radius: 4px; cursor: pointer;">${saveText}</button>
+        <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
+          <button id="clear-btn" style="flex: 1; padding: 0.5rem 1rem; border: 1px solid #ddd; background: #6c757d; color: white; border-radius: 4px; cursor: pointer;">Clear API Key</button>
+          <button id="save-btn" style="flex: 1; padding: 0.5rem 1rem; border: none; background: #007bff; color: white; border-radius: 4px; cursor: pointer;">${saveText}</button>
         </div>
       `;
 
@@ -599,26 +592,90 @@ class SpeechService {
       document.body.appendChild(modal);
 
       const apiKeyInput = dialog.querySelector('#api-key-input');
-      const cancelBtn = dialog.querySelector('#cancel-btn');
-      const skipBtn = dialog.querySelector('#skip-btn');
+      const closeBtn = dialog.querySelector('#close-btn');
+      const clearBtn = dialog.querySelector('#clear-btn');
       const saveBtn = dialog.querySelector('#save-btn');
+      const copyBtns = dialog.querySelectorAll('.copy-key-btn');
 
       const cleanup = () => {
         document.body.removeChild(modal);
       };
 
-      cancelBtn.addEventListener('click', () => {
+      closeBtn.addEventListener('click', () => {
         cleanup();
         resolve(false);
       });
 
-      skipBtn.addEventListener('click', () => {
+      clearBtn.addEventListener('click', () => {
+        // Save current API key as backup before clearing
+        if (this.apiKey) {
+          localStorage.setItem('responsiveVoiceApiKey_backup', this.apiKey);
+          console.log('API key saved as backup before clearing');
+        }
+        
+        // Clear current API key configuration
+        localStorage.removeItem('responsiveVoiceApiKey');
+        this.apiKey = null;
+        this.useResponsiveVoice = false;
+        
         cleanup();
         resolve(false); // Use local voice (fallback)
       });
 
+      // Add copy functionality to copy buttons
+      copyBtns.forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const keyToCopy = btn.dataset.key;
+          
+          try {
+            await navigator.clipboard.writeText(keyToCopy);
+            
+            // Also paste into the input field and show it
+            apiKeyInput.value = keyToCopy;
+            apiKeyInput.type = 'text';
+            
+            // Show temporary success feedback
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+            btn.style.color = '#28a745';
+            
+            // Hide after 5 seconds
+            setTimeout(() => {
+              apiKeyInput.type = 'password';
+              btn.innerHTML = originalHTML;
+              btn.style.color = '#666';
+            }, 4000);
+          } catch (error) {
+            console.error('Failed to copy API key:', error);
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = keyToCopy;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            
+            // Also paste into the input field and show it
+            apiKeyInput.value = keyToCopy;
+            apiKeyInput.type = 'text';
+            
+            // Show temporary success feedback
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+            btn.style.color = '#28a745';
+            
+            // Hide after 5 seconds
+            setTimeout(() => {
+              apiKeyInput.type = 'password';
+              btn.innerHTML = originalHTML;
+              btn.style.color = '#666';
+            }, 5000);
+          }
+        });
+      });
+
       saveBtn.addEventListener('click', async () => {
-        const newApiKey = apiKeyInput.value.trim();
+        let newApiKey = apiKeyInput.value.trim();
         
         console.log('Save button clicked:', {
           isReconfiguration,
@@ -627,18 +684,18 @@ class SpeechService {
           condition: isReconfiguration && !newApiKey && hasExistingKey
         });
         
-        // If reconfiguration and no new key provided, retry with existing key
-        if (isReconfiguration && !newApiKey && hasExistingKey) {
-          console.log('Attempting to retry ResponsiveVoice with existing key...');
-          try {
-            // Attempt to reload ResponsiveVoice with existing key
-            await this.retryResponsiveVoice();
-            cleanup();
-            resolve(true);
-            return;
-          } catch (error) {
-            alert('Failed to reload ResponsiveVoice: ' + error.message);
-            return;
+        // If no new key provided, use existing or backup key
+        if (!newApiKey) {
+          if (this.apiKey) {
+            console.log('Using existing API key for configuration');
+            newApiKey = this.apiKey;
+          } else {
+            const backupKey = localStorage.getItem('responsiveVoiceApiKey_backup');
+            if (backupKey) {
+              console.log('Using backup API key for configuration');
+              newApiKey = backupKey;
+              apiKeyInput.value = backupKey; // Show the backup key in input
+            }
           }
         }
         
@@ -650,7 +707,7 @@ class SpeechService {
           } catch (error) {
             alert('Invalid API key: ' + error.message);
           }
-        } else if (!isReconfiguration) {
+        } else {
           alert('Please enter a valid API key');
         }
       });
@@ -676,6 +733,10 @@ class SpeechService {
     }
 
     const isNewKey = apiKey !== this.apiKey;
+
+    if (isNewKey) {
+      localStorage.setItem('responsiveVoiceApiKey_backup', this.apiKey);
+    }
     this.apiKey = apiKey;
     this.useResponsiveVoice = true;
     localStorage.setItem('responsiveVoiceApiKey', apiKey);
