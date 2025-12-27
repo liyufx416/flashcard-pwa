@@ -168,6 +168,10 @@ jobs:
       - name: Commit version and date changes to deploy branch
         run: |
           git add manifest.json credits.md
+          # Change to Beta icon for staging deployment
+          if [ "$github.ref_name" != "main" ]; then
+            git add images/flashcard-512.png images/apple-touch-icon.png images/favicon.ico
+          fi
           # Only commit if there are actual changes (e.g., if version was bumped or date changed)
           git commit -m "chore(deploy): Bump version to ${{ env.NEW_VERSION }} on ${{ env.RELEASE_DATE }}" || echo "No version bump changes to commit"
           git push -u origin ${{ env.DEPLOY_BRANCH }}:${{ env.DEPLOY_DESTINATION_BRANCH }} --force # Force push the merge commit
