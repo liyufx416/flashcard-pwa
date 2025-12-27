@@ -1,4 +1,4 @@
-name: Deploy to S3 and invalidate CloudFront Distribution, with Auto-Versioning to 'deploy' branch
+name: Deploy to S3 and invalidate CloudFront Distribution, with Auto-Versioning
 
 on:
   push:
@@ -16,6 +16,13 @@ jobs:
   version-and-deploy:
     runs-on: ubuntu-latest
 
+    # Define the environment based on the branch.
+    # GitHub will automatically load secrets/variables from this environment.
+    environment:
+      ${{ github.ref_name == 'main' && 'Prod' || github.ref_name == 'staging' && 'staging' }}
+      # This conditional chooses the environment:
+      # - If branch is 'main', target 'Prod' environment.
+      # - If branch is 'staging', target 'Staging' environment.
     env:
       AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
       AWS_CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.AWS_CF_DISTRIBUTION_ID}}
@@ -168,12 +175,12 @@ jobs:
           # Only commit if there are actual changes (e.g., if version was bumped or date changed)
           git commit -m "chore(deploy): Bump version to ${{ env.NEW_VERSION }} on ${{ env.RELEASE_DATE }}" || echo "No version bump changes to commit"
           git push -u origin ${{ env.DEPLOY_BRANCH }}:${{ env.DEPLOY_DESTINATION_BRANCH }} --force # Force push the merge commit
-
+   
       - name: Configure AWS Credentials (using OIDC)
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }} # <<-- SETUP AS GITHUB SECRET
-          aws-region: ${{ secrets.AWS_REGION }}       # <<-- SETUP AS GITHUB SECRET
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }} # 
+          aws-region: ${{ secrets.AWS_REGION }}       
 
       - name: Sync files to S3
         run: |
@@ -192,3 +199,5 @@ jobs:
             --distribution-id ${{ env.AWS_CLOUDFRONT_DISTRIBUTION_ID }} \
             --paths "/*" # Invalidate all paths. Adjust if you have specific invalidation needs.
           echo "Successfully initiated CloudFront invalidation for distribution: ${{ env.AWS_CLOUDFRONT_DISTRIBUTION_ID }}"
+
+
