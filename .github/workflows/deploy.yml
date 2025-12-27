@@ -180,8 +180,8 @@ jobs:
       - name: Configure AWS Credentials (using OIDC)
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: ${{ secret.AWS_ROLE_ARN }} # 
-          aws-region: ${{ secret.AWS_REGION }}       
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }} # 
+          aws-region: ${{ secrets.AWS_REGION }}       
 
       - name: Sync files to S3
         run: |
