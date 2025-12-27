@@ -131,8 +131,12 @@ jobs:
             echo "Manifest.json version is '$CURRENT_VERSION_FULL' (with existing micro). Incrementing micro."
             NEW_MICRO=$((EXISTING_MICRO + 1))
           fi
-          
-          NEW_VERSION= ${{ github.ref_name == 'main' && "$MAJOR.$MINOR.$NEW_MICRO" || github.ref_name == 'staging' && "$MAJOR.$MINOR.$NEW_MICRO Beta" }}
+
+          if [ "$github.ref_name" == 'main' ]; then
+            NEW_VERSION="$MAJOR.$MINOR.$NEW_MICRO" 
+          else
+            NEW_VERSION="$MAJOR.$MINOR.$NEW_MICRO Beta"
+          fi
 
           echo "Old Version: $CURRENT_VERSION_FULL"
           echo "New Version: $NEW_VERSION"
@@ -154,7 +158,7 @@ jobs:
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
           # Change to Beta icon for staging deployment
-          if [ "${{ github.ref_name }}" != "main" ]; then
+          if [ "$github.ref_name" != "main" ]; then
             cp images/flashcard-beta-512.png images/flashcard-512.png
             cp images/apple-touch-icon-beta.png images/apple-touch-icon.png
             cp images/favicon-beta.ico images/favicon.ico
