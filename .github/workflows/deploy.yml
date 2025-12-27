@@ -1,4 +1,4 @@
-name: Deploy to S3 and invalidate CloudFront Distribution, with Auto-Versioning to 'deploy' branch
+name: Deploy to S3 and invalidate CloudFront Distribution, with Auto-Versioning
 
 on:
   push:
