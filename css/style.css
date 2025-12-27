@@ -326,7 +326,7 @@ header {
   overflow: visible; /* Changed from hidden */
   width: fit-content; /* Box size fits content */
   max-width: 100px; /* Limit max width to prevent interfering with title */
-  text-align: left; /* Text is left-aligned within the box */
+  text-align: right; /* Text is left-aligned within the box */
   font-weight: normal;
   margin-left: auto; /* Box is right-aligned within parent */
   padding-right: 0.5rem;
@@ -964,9 +964,27 @@ input:checked + .toggle-slider:before {
   flex-shrink: 0;
 }
 
+.speaker-btn.local-voice {
+  background: var(--primary-color);
+}
+
+.speaker-btn.responsive-voice {
+  background: var(--background-end);
+}
+
 .speaker-btn:hover {
   background: var(--secondary-color);
   color: var(--primary-dark);
+}
+
+.speaker-btn.local-voice:hover {
+  background: var(--primary-light);
+  color: white;
+}
+
+.speaker-btn.responsive-voice:hover {
+  background: var(--background-start);
+  color: white;
 }
 
 .speaker-btn:active {
