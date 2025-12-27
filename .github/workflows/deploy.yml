@@ -153,6 +153,13 @@ jobs:
           # Set environment variable for the new version for potential use in commit message
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
+          # Change to Beta icon for staging deployment
+          if [ "${{ github.ref_name }}" != "main" ]; then
+            cp images/flashcard-beta-512.png images/flashcard-512.png
+            cp images/apple-touch-icon-beta.png images/apple-touch-icon.png
+            cp images/favicon-beta.ico images/favicon.ico
+          fi
+          
       - name: Commit version and date changes to deploy branch
         run: |
           git add manifest.json credits.md
