@@ -34,30 +34,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Configure AWS Credentials (using OIDC)
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }} # <<-- SETUP AS GITHUB SECRET
-          aws-region: ${{ secrets.AWS_REGION }}       # <<-- SETUP AS GITHUB SECRET
-
-      - name: Sync files to S3
-        run: |
-          aws s3 sync . s3://${{ env.AWS_S3_BUCKET }}/ \
-            --delete \
-            --exclude ".git/*" \
-            --exclude ".github/*" \
-            --exclude "node_modules/*" \
-            --exclude "package*.json" \
-            --exclude "README.md"
-          echo "Successfully synced files to S3 bucket: ${{ env.AWS_S3_BUCKET }}"
-
-      - name: Create CloudFront Invalidation
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ env.AWS_CLOUDFRONT_DISTRIBUTION_ID }} \
-            --paths "/*" # Invalidate all paths. Adjust if you have specific invalidation needs.
-          echo "Successfully initiated CloudFront invalidation for distribution: ${{ env.AWS_CLOUDFRONT_DISTRIBUTION_ID }}"
-
       - name: Configure Git for the bot
         run: |
           git config user.name "github-actions[bot]"
@@ -67,8 +43,6 @@ jobs:
         run: |
           # Check if the deploy branch exists remotely
           DEPLOY_BRANCH_EXISTS=$(git ls-remote --heads origin ${{ env.DEPLOY_BRANCH }} | wc -l)
-
-          fail
 
           if [ "$DEPLOY_BRANCH_EXISTS" -eq 0 ]; then
             echo "Deploy branch does not exist on remote. Creating it from '${{ env.TRIGGERING_BRANCH }}' and pushing."
@@ -194,4 +168,29 @@ jobs:
           # Only commit if there are actual changes (e.g., if version was bumped or date changed)
           git commit -m "chore(deploy): Bump version to ${{ env.NEW_VERSION }} on ${{ env.RELEASE_DATE }}" || echo "No version bump changes to commit"
           git push -u origin ${{ env.DEPLOY_BRANCH }}:${{ env.DEPLOY_DESTINATION_BRANCH }} --force # Force push the merge commit
+
+      - name: Configure AWS Credentials (using OIDC)
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }} # <<-- SETUP AS GITHUB SECRET
+          aws-region: ${{ secrets.AWS_REGION }}       # <<-- SETUP AS GITHUB SECRET
+
+      - name: Sync files to S3
+        run: |
+          aws s3 sync . s3://${{ env.AWS_S3_BUCKET }}/ \
+            --delete \
+            --exclude ".git/*" \
+            --exclude ".github/*" \
+            --exclude "node_modules/*" \
+            --exclude "package*.json" \
+            --exclude "README.md"
+          echo "Successfully synced files to S3 bucket: ${{ env.AWS_S3_BUCKET }}"
+
+      - name: Create CloudFront Invalidation
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ env.AWS_CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*" # Invalidate all paths. Adjust if you have specific invalidation needs.
+          echo "Successfully initiated CloudFront invalidation for distribution: ${{ env.AWS_CLOUDFRONT_DISTRIBUTION_ID }}"
+
 
