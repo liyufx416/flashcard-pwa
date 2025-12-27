@@ -76,9 +76,9 @@ flashcard-pwa/
 ```
 
 ## Deployment
-Create pull request and merge your code into "staging" branch to trigger automatic staging deployment (beta version), which is accessible at [Staging site](d2xw3hxshaa0nv.cloudfront.net).
+Create pull request and merge your code into "staging" branch to trigger automatic staging deployment (beta version), which is accessible at [Staging site](https://d2xw3hxshaa0nv.cloudfront.net).
 
-Create pull request and merge your code into "main" branch to trigger automatic prod deployment, which is accessible at [Prod site](d3vp78wfkpeym6.cloudfront.net).
+Create pull request and merge your code into "main" branch to trigger automatic prod deployment, which is accessible at [Prod site](https://d3vp78wfkpeym6.cloudfront.net).
 
 Only repo admin can approve PRs into staging and main branches and some other protected branches.
 
