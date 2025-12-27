@@ -158,7 +158,7 @@ jobs:
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
           # Change to Beta icon for staging deployment
-          if [ "$github.ref_name" != "main" ]; then
+          if [ "${{ github.ref_name }}" != "main" ]; then
             echo "Updating beta icons"
             cp images/flashcard-beta-512.png images/flashcard-512.png
             cp images/apple-touch-icon-beta.png images/apple-touch-icon.png
