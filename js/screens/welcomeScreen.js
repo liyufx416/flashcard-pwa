@@ -241,10 +241,9 @@ class WelcomeScreen {
           <div class="header-placeholder"></div>
         </header>
         <div class="screen-content">
-          <p><b>Master vocabularies of foreign languages with FlashCard App</b></p>
           <div class="language-selector">
             <div class="language-selector-row">
-              <label for="language-pair">Language Pair</label>
+              <label for="language-pair">Learning: </label>
               <div class="direction-toggle">
                 <label class="toggle-switch">
                   <input type="checkbox" id="reverse-direction" ${reverseDirectionChecked ? 'checked' : ''}>
