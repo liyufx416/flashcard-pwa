@@ -175,13 +175,12 @@ jobs:
           # Only commit if there are actual changes (e.g., if version was bumped or date changed)
           git commit -m "chore(deploy): Bump version to ${{ env.NEW_VERSION }} on ${{ env.RELEASE_DATE }}" || echo "No version bump changes to commit"
           git push -u origin ${{ env.DEPLOY_BRANCH }}:${{ env.DEPLOY_DESTINATION_BRANCH }} --force # Force push the merge commit
-          echo "Environment ${{ vars.ENV_NAME }} ${{ vars.AWS_ROLE_ARN }} ${{ vars.AWS_REGION }}"
-
+   
       - name: Configure AWS Credentials (using OIDC)
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }} # 
-          aws-region: ${{ vars.AWS_REGION }}       
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }} # 
+          aws-region: ${{ secrets.AWS_REGION }}       
 
       - name: Sync files to S3
         run: |
