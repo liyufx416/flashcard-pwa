@@ -3,8 +3,9 @@ name: Deploy to S3 and invalidate CloudFront Distribution, with Auto-Versioning 
 on:
   push:
     branches:
-      - main # Trigger when changes are pushed to main
-
+      - main  # Prod deployment from main branch only
+      - staging  # Staging deployment from staging branch only
+      
 # Permissions required for OIDC (id-token) and for writing to the repo (contents).
 # 'contents: write' is crucial for the Git push operations.
 permissions:
@@ -14,11 +15,20 @@ permissions:
 jobs:
   version-and-deploy:
     runs-on: ubuntu-latest
+
+    # Define the environment based on the branch.
+    # GitHub will automatically load secrets/variables from this environment.
+    environment:
+      ${{ github.ref_name == 'main' && 'Prod' || github.ref_name == 'staging' && 'Staging' }}
+      # This conditional chooses the environment:
+      # - If branch is 'main', target 'Prod' environment.
+      # - If branch is 'staging', target 'Staging' environment.
     env:
       AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
       AWS_CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.AWS_CF_DISTRIBUTION_ID}}
       DEPLOY_BRANCH: deploy # The branch used for versioning and deployment
-      MAIN_BRANCH: main     # The main development branch
+      DEPLOY_DESTINATION_BRANCH: ${{ github.ref_name == 'main' && 'deploy' || github.ref_name == 'staging' && 'deploy-staging' }}
+      TRIGGERING_BRANCH: ${{ github.ref_name }}  # branch triggering the deployment
 
     steps:
       - name: Checkout or Create Deploy Branch
@@ -36,13 +46,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Handle Deploy Branch Existence and Merge from Main
+      - name: Handle Deploy Branch Existence and Merge from triggering branch
         run: |
           # Check if the deploy branch exists remotely
           DEPLOY_BRANCH_EXISTS=$(git ls-remote --heads origin ${{ env.DEPLOY_BRANCH }} | wc -l)
 
           if [ "$DEPLOY_BRANCH_EXISTS" -eq 0 ]; then
-            echo "Deploy branch does not exist on remote. Creating it from '${{ env.MAIN_BRANCH }}' and pushing."
+            echo "Deploy branch does not exist on remote. Creating it from '${{ env.TRIGGERING_BRANCH }}' and pushing."
             # If actions/checkout couldn't find deploy, it checked out main.
             # So, create new deploy branch from current HEAD (which is main's latest state).
             git checkout -b ${{ env.DEPLOY_BRANCH }}
@@ -50,7 +60,7 @@ jobs:
             echo "Successfully created and pushed new deploy branch."
             NO_MERGE_NEEDED="true" # Flag to skip merging main into deploy for the very first creation
           else
-            echo "Deploy branch exists. Switching to it and preparing to merge '${{ env.MAIN_BRANCH }}'."
+            echo "Deploy branch exists. Switching to it and preparing to merge '${{ env.TRIGGERING_BRANCH }}'."
             git checkout ${{ env.DEPLOY_BRANCH }}
             git pull origin ${{ env.DEPLOY_BRANCH }} # Ensure local deploy is up-to-date with remote deploy
             NO_MERGE_NEEDED="false"
@@ -58,34 +68,35 @@ jobs:
 
           # Only attempt merge if deploy branch already existed
           if [ "$NO_MERGE_NEEDED" != "true" ]; then
-            echo "Merging latest changes from '${{ env.MAIN_BRANCH }}' into '${{ env.DEPLOY_BRANCH }}'."
-            git fetch origin ${{ env.MAIN_BRANCH }}:${{ env.MAIN_BRANCH }} # Fetch main to merge from it
+            echo "Merging latest changes from '${{ env.TRIGGERING_BRANCH }}' into '${{ env.DEPLOY_BRANCH }}'."
+            git fetch origin ${{ env.TRIGGERING_BRANCH }}:${{ env.TRIGGERING_BRANCH }} # Fetch main to merge from it
             
             # Attempt merge. If conflicts occur, resolve by preferring 'main's version.
             # We use --no-commit to handle conflicts in script before committing.
-            if git merge --no-ff --no-commit ${{ env.MAIN_BRANCH }}; then
+            if git merge --no-ff --no-commit ${{ env.TRIGGERING_BRANCH }}; then
                 echo "Merge completed without conflicts."
-                git commit -m "Merge branch '${{ env.MAIN_BRANCH }}' into ${{ env.DEPLOY_BRANCH }}"
+                git commit -m "Merge branch '${{ env.TRIGGERING_BRANCH }}' into ${{ env.DEPLOY_BRANCH }}"
             else
-                echo "Merge resulted in conflicts. Resolving by preferring '${{ env.MAIN_BRANCH }}' for all conflicted files."
+                echo "Merge resulted in conflicts. Resolving by preferring '${{ env.TRIGGERING_BRANCH }}' for all conflicted files."
                 # Get list of conflicted files
                 CONFLICTED_FILES=$(git diff --name-only --diff-filter=U)
                 if [ -z "$CONFLICTED_FILES" ]; then
                   echo "No conflicted files found, something is wrong with merge status. Committing existing changes."
-                  git commit -m "Merge branch '${{ env.MAIN_BRANCH }}' into ${{ env.DEPLOY_BRANCH }}"
+                  git commit -m "Merge branch '${{ env.TRIGGERING_BRANCH }}' into ${{ env.DEPLOY_BRANCH }}"
                 else
                   # For each conflicted file, checkout the version from the main branch (theirs in merge context)
                   for file in $CONFLICTED_FILES; do
-                    echo "Resolving conflict in $file: Preferring '${{ env.MAIN_BRANCH }}' version."
+                    echo "Resolving conflict in $file: Preferring '${{ env.TRIGGERING_BRANCH }}' version."
                     git checkout --theirs "$file" # 'theirs' refers to the branch being merged FROM (main)
                     git add "$file"
                   done
                   # Commit the conflict resolution
-                  git commit -m "Merge branch '${{ env.MAIN_BRANCH }}' into ${{ env.DEPLOY_BRANCH }} (auto-resolved conflicts preferring main)"
+                  git commit -m "Merge branch '${{ env.TRIGGERING_BRANCH }}' into ${{ env.DEPLOY_BRANCH }} (auto-resolved conflicts preferring main)"
                 fi
             fi
-            git push origin ${{ env.DEPLOY_BRANCH }} # Push the merge commit
           fi
+          echo "Pushing into: ${{ env.DEPLOY_DESTINATION_BRANCH }}"
+          git push -u origin ${{ env.DEPLOY_BRANCH }}:${{ env.DEPLOY_DESTINATION_BRANCH }} --force # Force push the merge commit
 
       - name: Get current date and format for credits.md
         id: date
@@ -120,8 +131,12 @@ jobs:
             echo "Manifest.json version is '$CURRENT_VERSION_FULL' (with existing micro). Incrementing micro."
             NEW_MICRO=$((EXISTING_MICRO + 1))
           fi
-          
-          NEW_VERSION="$MAJOR.$MINOR.$NEW_MICRO"
+
+          if [ "$github.ref_name" == 'main' ]; then
+            NEW_VERSION="$MAJOR.$MINOR.$NEW_MICRO" 
+          else
+            NEW_VERSION="$MAJOR.$MINOR.$NEW_MICRO Beta"
+          fi
 
           echo "Old Version: $CURRENT_VERSION_FULL"
           echo "New Version: $NEW_VERSION"
@@ -142,12 +157,24 @@ jobs:
           # Set environment variable for the new version for potential use in commit message
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
+          # Change to Beta icon for staging deployment
+          if [ "$github.ref_name" != "main" ]; then
+            echo "Updating beta icons"
+            cp images/flashcard-beta-512.png images/flashcard-512.png
+            cp images/apple-touch-icon-beta.png images/apple-touch-icon.png
+            cp images/favicon-beta.ico images/favicon.ico
+          fi
+          
       - name: Commit version and date changes to deploy branch
         run: |
           git add manifest.json credits.md
+          # Change to Beta icon for staging deployment
+          if [ "$github.ref_name" != "main" ]; then
+            git add images/flashcard-512.png images/apple-touch-icon.png images/favicon.ico
+          fi
           # Only commit if there are actual changes (e.g., if version was bumped or date changed)
           git commit -m "chore(deploy): Bump version to ${{ env.NEW_VERSION }} on ${{ env.RELEASE_DATE }}" || echo "No version bump changes to commit"
-          git push origin ${{ env.DEPLOY_BRANCH }}
+          git push -u origin ${{ env.DEPLOY_BRANCH }}:${{ env.DEPLOY_DESTINATION_BRANCH }} --force # Force push the merge commit
 
       - name: Configure AWS Credentials (using OIDC)
         uses: aws-actions/configure-aws-credentials@v2
