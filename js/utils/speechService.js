@@ -741,15 +741,17 @@ class SpeechService {
     this.useResponsiveVoice = true;
     localStorage.setItem('responsiveVoiceApiKey', apiKey);
 
-    // Load ResponsiveVoice with new API key (force reload if it's a new key)
-    try {
-      this.responsiveVoicePromise = this.loadResponsiveVoiceWithKey(isNewKey);
-      await this.responsiveVoicePromise;
-      this.responsiveVoiceTemporarilyUnavailable = false;
-    } catch (error) {
-      // If loading fails, don't remove the API key - it might be a temporary issue
-      this.responsiveVoiceTemporarilyUnavailable = true;
-      throw error;
+    if (isNewKey()) {
+      // Use windows.reload() to reload ResponsiveVoice with new API key (force reload if it's a new key)
+      try {
+        this.responsiveVoicePromise = this.loadResponsiveVoiceWithKey(isNewKey);
+        await this.responsiveVoicePromise;
+        this.responsiveVoiceTemporarilyUnavailable = false;
+      } catch (error) {
+        // If loading fails, don't remove the API key - it might be a temporary issue
+        this.responsiveVoiceTemporarilyUnavailable = true;
+        throw error;
+      }
     }
   }
 
