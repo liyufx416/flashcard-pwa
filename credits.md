@@ -1,4 +1,4 @@
-Last Release Date: YYYY-MM-DD
+Last Release Date: 2025-12-27
 
 ## Credits
 
