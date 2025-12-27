@@ -180,8 +180,8 @@ jobs:
       - name: Configure AWS Credentials (using OIDC)
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }} # <<-- SETUP AS GITHUB SECRET
-          aws-region: ${{ vars.AWS_REGION }}       # <<-- SETUP AS GITHUB SECRET
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }} # 
+          aws-region: ${{ vars.AWS_REGION }}       
 
       - name: Sync files to S3
         run: |
