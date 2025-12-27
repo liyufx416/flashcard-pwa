@@ -16,13 +16,6 @@ jobs:
   version-and-deploy:
     runs-on: ubuntu-latest
 
-    # Define the environment based on the branch.
-    # GitHub will automatically load secrets/variables from this environment.
-    environment:
-      ${{ github.ref_name == 'main' && 'Prod' || github.ref_name == 'staging' && 'Staging' }}
-      # This conditional chooses the environment:
-      # - If branch is 'main', target 'Prod' environment.
-      # - If branch is 'staging', target 'Staging' environment.
     env:
       AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
       AWS_CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.AWS_CF_DISTRIBUTION_ID}}
