@@ -3,11 +3,12 @@ import speechService from '../utils/speechService.js';
 import AppInfoModal from '../utils/appInfoModal.js';
 
 class StudyScreen {
-  constructor(container, languagePairId, reverseDirection, onBack) {
+  constructor(container, languagePairId, reverseDirection, onBack, searchResults = null) {
     this.container = container;
     this.languagePairId = languagePairId;
     this.reverseDirection = reverseDirection;
     this.onBack = onBack;
+    this.searchResults = searchResults;
     this.cards = [];
     this.languagePair = null;
     this.currentCardIndex = 0;
@@ -82,8 +83,14 @@ class StudyScreen {
       // Get time filter settings
       const timeFilter = this.getTimeFilter();
 
-      // Load cards from IndexedDB with automatic sync and time filter
-      this.cards = await dataSyncService.getFilteredCards(this.languagePairId, effectiveFilters, timeFilter);
+      // Use search results if available, otherwise load filtered cards
+      if (this.searchResults && this.searchResults.length > 0) {
+        this.cards = this.searchResults;
+        console.log(`Using search results: ${this.cards.length} words`);
+      } else {
+        // Load cards from IndexedDB with automatic sync and time filter
+        this.cards = await dataSyncService.getFilteredCards(this.languagePairId, effectiveFilters, timeFilter);
+      }
 
       this.currentCardIndex = 0;
       this.isFlipped = false;

@@ -21,20 +21,21 @@ class FlashcardApp {
   showWelcomeScreen() {
     this.currentScreen = new WelcomeScreen(
       this.container,
-      (languagePairId, reverseDirection) => this.startStudy(languagePairId, reverseDirection),
+      (languagePairId, reverseDirection, searchResults = null) => this.startStudy(languagePairId, reverseDirection, searchResults),
       () => this.showManageCardsScreen()
     );
     this.currentScreen.loadLanguagePairs();
   }
 
   // Show study screen
-  startStudy(languagePairId, reverseDirection = false) {
+  startStudy(languagePairId, reverseDirection = false, searchResults = null) {
     this.currentLanguagePair = languagePairId;
     this.currentScreen = new StudyScreen(
       this.container,
       languagePairId,
       reverseDirection,
-      () => this.showWelcomeScreen()
+      () => this.showWelcomeScreen(),
+      searchResults
     );
     this.currentScreen.loadCards();
   }
