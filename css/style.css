@@ -1835,6 +1835,174 @@ input[type="text"] {
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
 }
 
+/* Search Panel Styles */
+.search-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.search-panel.hidden {
+  display: none;
+}
+
+.search-panel-content {
+  border-radius: 12px;
+  padding: 2rem;
+  width: 90%;
+  max-width: 500px;
+  background: linear-gradient(135deg, var(--background-start) 0%, var(--background-end) 100%);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.search-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.search-header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #666;
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.close-btn:hover {
+  background-color: #f5f5f5;
+}
+
+.search-input-container {
+  margin-bottom: 1.5rem;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border: 3px solid #e5e7eb;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+/* Search history datalist styling */
+.search-input::-webkit-calendar-picker-indicator,
+.search-input::-webkit-inner-spin-button {
+  display: none;
+}
+
+/* Style for datalist options (browser-dependent) */
+.search-input[list] {
+  cursor: text;
+}
+
+.search-buttons {
+  display: flex;
+  gap: 1rem;
+}
+
+.search-buttons .btn {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.search-buttons .btn-primary {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.search-buttons .btn-primary:hover {
+  background-color: var(--primary-dark);
+}
+
+/* Study and Search button row */
+.study-search-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.study-btn {
+  flex: 1;
+  padding: 0.75rem 1rem;
+}
+
+.search-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3rem;
+  max-width: 3rem;
+  padding: 0.75rem;
+  flex-shrink: 0;
+}
+
+.search-btn svg {
+  flex-shrink: 0;
+}
+
+/* Responsive adjustments for search panel */
+@media (max-width: 480px) {
+  .search-panel-content {
+    width: 95%;
+    padding: 1.5rem;
+    margin: 1rem;
+  }
+  
+  .search-buttons {
+    flex-direction: column;
+  }
+  
+  .search-buttons .btn {
+    width: 100%;
+  }
+}
+
 /* Responsive adjustments for speech settings */
 @media (max-width: 480px) {
   .speech-buttons {

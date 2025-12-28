@@ -133,6 +133,11 @@ class DataSyncService {
     return await cardDB.getFilteredCards(languagePairId, difficultyFilters, timeFilter);
   }
 
+  async getAllWords(languagePairId) {
+    await this.ensureDataLoaded(languagePairId);
+    return await cardDB.getAllCards(languagePairId);
+  }
+
   async updateCardProgress(languagePairId, word, difficulty) {
     const timestamp = Date.now();
     return await cardDB.updateCardProgress(languagePairId, word, difficulty, timestamp);
