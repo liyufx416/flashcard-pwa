@@ -13,6 +13,10 @@ class AppInfoModal {
       const creditsText = await creditsResponse.text();
       const creditsHtml = marked.parse(creditsText);
 
+      // Get version: prioritize local storage, then fall back to manifest
+      const localVersion = localStorage.getItem('appVersion');
+      const displayVersion = localVersion || manifest.version;
+
       // Create modal HTML
       const modalHtml = `
         <div class="modal-overlay" id="app-info-modal">
@@ -20,7 +24,7 @@ class AppInfoModal {
             <div class="modal-body">
               <div class="app-info-header">
                 <table> <tr><td><span class="app-info-icon"/></td>
-                <td><div class="app-info-name">${manifest.short_name}</div><div class="app-info-version">Version ${manifest.version}</div></td>
+                <td><div class="app-info-name">${manifest.short_name}</div><div class="app-info-version">Version ${displayVersion}</div></td>
                 <td><button class="check-update-btn" id="check-update-btn" title="Check Update">↻</button></span></td></tr></table>
               </div>
               <div class="credits-content">
