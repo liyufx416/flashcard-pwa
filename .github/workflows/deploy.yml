@@ -137,7 +137,7 @@ jobs:
           else
             # Calculate the UTC timestamp divided by 1000
             TIME_PART=$(( $(date +%s) / 1000 ))            
-            NEW_VERSION="$MAJOR.$MINOR.$NEW_MICRO Beta-TIME_PART"
+            NEW_VERSION="$MAJOR.$MINOR.$NEW_MICRO Beta-$TIME_PART"
           fi
 
           echo "Old Version: $CURRENT_VERSION_FULL"
