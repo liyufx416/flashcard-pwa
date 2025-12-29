@@ -607,68 +607,102 @@ class WelcomeScreen {
     searchPanel.classList.remove('hidden');
     searchInput.focus();
     
-    // Update search history datalist
+    // Initially remove the list attribute to prevent datalist from showing
+    searchInput.removeAttribute('list');
+    
+    // Update datalist and simulate a click to trigger it naturally
     this.updateSearchHistoryDatalist();
+    
+    // Simulate a click to trigger the datalist dropdown
+    setTimeout(() => {
+      searchInput.setAttribute('list', 'search-history');
+      searchInput.click();
+    }, 1000);
 
-    // Close panel when clicking outside
+    // Store event listeners for cleanup
+    this.searchPanelEventListeners = [];
+
+    // Close panel when clicking outside (only if search input is empty)
     const closeOnOutsideClick = (e) => {
       // Check if click is outside the search panel and not on the search button
       if (searchPanel==e.target || !searchPanel.contains(e.target)) {
-        this.hideSearchPanel();
-        document.removeEventListener('click', closeOnOutsideClick);
+        // Only close if search input is empty or whitespace
+        if (searchInput.value.trim() === '') {
+          this.cleanupSearchPanel();
+        }
       }
     };
 
     // Add outside click listener with a small delay to prevent immediate closing
     setTimeout(() => {
       document.addEventListener('click', closeOnOutsideClick);
+      this.searchPanelEventListeners.push({ type: 'click', handler: closeOnOutsideClick, target: document });
     }, 100);
 
     // Close button
     if (closeBtn) {
-      closeBtn.onclick = () => {
-        this.hideSearchPanel();
-        document.removeEventListener('click', closeOnOutsideClick);
+      const closeHandler = () => {
+        this.cleanupSearchPanel();
       };
+      closeBtn.onclick = closeHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: closeHandler, target: closeBtn });
     }
 
     // Exact search button
     if (exactSearchBtn) {
-      exactSearchBtn.onclick = () => {
+      const exactSearchHandler = () => {
         this.performSearch(true);
-        document.removeEventListener('click', closeOnOutsideClick);
       };
+      exactSearchBtn.onclick = exactSearchHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: exactSearchHandler, target: exactSearchBtn });
     }
 
     // Fuzzy search button
     if (fuzzySearchBtn) {
-      fuzzySearchBtn.onclick = () => {
+      const fuzzySearchHandler = () => {
         this.performSearch(false);
-        document.removeEventListener('click', closeOnOutsideClick);
       };
+      fuzzySearchBtn.onclick = fuzzySearchHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: fuzzySearchHandler, target: fuzzySearchBtn });
     }
 
     // Enter key to search, Escape to close
-    searchInput.onkeydown = (e) => {
+    const keyHandler = (e) => {
       if (e.key === 'Enter') {
         this.performSearch(true); // Default to exact search on Enter
-        document.removeEventListener('click', closeOnOutsideClick);
       } else if (e.key === 'Escape') {
-        this.hideSearchPanel();
-        document.removeEventListener('click', closeOnOutsideClick);
+        this.cleanupSearchPanel();
       }
     };
+    searchInput.onkeydown = keyHandler;
+    this.searchPanelEventListeners.push({ type: 'keydown', handler: keyHandler, target: searchInput });
 
     // Also close on Escape key anywhere in the panel
     const closeOnEscape = (e) => {
       if (e.key === 'Escape') {
-        this.hideSearchPanel();
-        document.removeEventListener('click', closeOnOutsideClick);
-        document.removeEventListener('keydown', closeOnEscape);
+        this.cleanupSearchPanel();
       }
     };
 
     document.addEventListener('keydown', closeOnEscape);
+    this.searchPanelEventListeners.push({ type: 'keydown', handler: closeOnEscape, target: document });
+  }
+
+  cleanupSearchPanel() {
+    // Clean up all event listeners
+    if (this.searchPanelEventListeners) {
+      this.searchPanelEventListeners.forEach(listener => {
+        if (listener.target === document) {
+          listener.target.removeEventListener(listener.type, listener.handler);
+        } else if (listener.target) {
+          listener.target.onclick = null;
+          listener.target.onkeydown = null;
+        }
+      });
+      this.searchPanelEventListeners = [];
+    }
+    
+    this.hideSearchPanel();
   }
 
   hideSearchPanel() {
@@ -792,14 +826,15 @@ class WelcomeScreen {
 
       if (searchResults.length === 0) {
         alert(`No words found matching "${searchTerm}"`);
+        // Don't cleanup - let the user close the panel manually
         return;
       }
 
       // Save search term to history
       this.saveSearchHistory(searchTerm);
 
-      // Hide search panel
-      this.hideSearchPanel();
+      // Clean up and hide search panel
+      this.cleanupSearchPanel();
 
       // Start study session with search results
       console.log(`Found ${searchResults.length} words matching "${searchTerm}" (${isExact ? 'exact' : 'fuzzy'} match)`);
