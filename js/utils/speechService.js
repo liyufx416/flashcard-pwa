@@ -741,7 +741,7 @@ class SpeechService {
     this.useResponsiveVoice = true;
     localStorage.setItem('responsiveVoiceApiKey', apiKey);
 
-    if (isNewKey()) {
+    if (isNewKey) {
       // Use windows.reload() to reload ResponsiveVoice with new API key (force reload if it's a new key)
       try {
         this.responsiveVoicePromise = this.loadResponsiveVoiceWithKey(isNewKey);
