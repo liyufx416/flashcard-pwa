@@ -216,41 +216,6 @@ header {
   padding: 1.5rem;
 }
 
-.app-info-header {
-  text-align: center;
-  padding: 1rem;
-  background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
-  color: white;
-  border-radius: var(--border-radius);
-  margin-bottom: 1rem;
-  gap: 1rem;
-}
-
-.app-info-name {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.app-info-name::before {
-  content: '';
-  display: inline-block;
-  width: 36px;
-  height: 36px;
-  background-image: url('../images/favicon.ico');
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
-  vertical-align: middle;
-  margin-right: 1rem;
-}
-
-.app-info-version {
-  font-size: 1rem;
-  opacity: 0.9;
-  margin: 0.25rem 0 0 0;
-}
-
 .close-btn {
     position: absolute;
     top: 1rem;
@@ -2020,6 +1985,131 @@ input[type="text"] {
   }
 }
 
+.app-info-header {
+  text-align: center;
+  padding: 0.5rem 0.75rem;
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
+  color: white;
+  border-radius: var(--border-radius);
+  margin-bottom: 1rem;
+  gap: 1rem;
+}
+
+.app-info-header table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.app-info-header table td {
+  padding: 0;
+  vertical-align: middle;
+}
+
+.app-info-header table td:first-child {
+  width: auto; /* Icon column - auto width */
+}
+
+.app-info-header table td:nth-child(2) {
+  width: 100%; /* Middle column - takes all remaining space */
+}
+
+.app-info-header table td:last-child {
+  width: auto; /* Button column - auto width */
+  text-align: right;
+}
+
+.app-info-name {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0;
+  text-align: center;
+}
+
+.app-info-icon::before {
+  content: '';
+  display: inline-block;
+  width: 36px;
+  height: 36px;
+  background-image: url('../images/favicon.ico');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  vertical-align: middle;
+  margin-right: 1rem;
+}
+
+.app-info-version {
+  font-size: 1rem;
+  opacity: 0.9;
+  margin: -0.5rem 0 0 0;
+  text-align: center;
+}
+
+.app-info-version-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.check-update-btn {
+  background: var(--primary-light);
+  color: white;
+  border: none;
+  padding: 0.5rem;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.2s;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.check-update-btn:hover:not(:disabled) {
+  background: var(--primary-dark);
+  transform: rotate(90deg);
+}
+
+.check-update-btn:disabled {
+  background: var(--secondary-color);
+  color: lightgreen;
+  cursor: not-allowed;
+  opacity: 0.7;
+  transform: none;
+}
+
+.check-update-btn.checking {
+  animation: spin 1s linear infinite;
+  color: white;
+}
+
+.check-update-btn.up-to-date {
+  background: #28a745;
+  color: white;
+  transform: none;
+}
+
+.check-update-btn.error {
+  background: #dc3545;
+  color: white;
+  transform: none;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Responsive adjustments for speech settings */
 @media (max-width: 480px) {
   .speech-buttons {
@@ -2029,5 +2119,15 @@ input[type="text"] {
   .speech-buttons .btn {
     width: 100%;
     text-align: center;
+  }
+  
+  .app-info-version-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .check-update-btn {
+    align-self: flex-end;
   }
 }
