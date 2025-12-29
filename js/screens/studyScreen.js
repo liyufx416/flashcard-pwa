@@ -3,11 +3,12 @@ import speechService from '../utils/speechService.js';
 import AppInfoModal from '../utils/appInfoModal.js';
 
 class StudyScreen {
-  constructor(container, languagePairId, reverseDirection, onBack) {
+  constructor(container, languagePairId, reverseDirection, onBack, searchResults = null) {
     this.container = container;
     this.languagePairId = languagePairId;
     this.reverseDirection = reverseDirection;
     this.onBack = onBack;
+    this.searchResults = searchResults;
     this.cards = [];
     this.languagePair = null;
     this.currentCardIndex = 0;
@@ -82,8 +83,14 @@ class StudyScreen {
       // Get time filter settings
       const timeFilter = this.getTimeFilter();
 
-      // Load cards from IndexedDB with automatic sync and time filter
-      this.cards = await dataSyncService.getFilteredCards(this.languagePairId, effectiveFilters, timeFilter);
+      // Use search results if available, otherwise load filtered cards
+      if (this.searchResults && this.searchResults.length > 0) {
+        this.cards = this.searchResults;
+        console.log(`Using search results: ${this.cards.length} words`);
+      } else {
+        // Load cards from IndexedDB with automatic sync and time filter
+        this.cards = await dataSyncService.getFilteredCards(this.languagePairId, effectiveFilters, timeFilter);
+      }
 
       this.currentCardIndex = 0;
       this.isFlipped = false;
@@ -252,6 +259,15 @@ class StudyScreen {
     const nextBtn = this.container.querySelector('#next-btn');
     const appTitle = this.container.querySelector('.app-title');
 
+    // Set initial speaker button classes based on ResponsiveVoice availability
+    speakerBtns.forEach(btn => {
+      if (speechService.useResponsiveVoice && speechService.responsiveVoiceLoaded) {
+        btn.classList.add('responsive-voice');
+      } else {
+        btn.classList.add('local-voice');
+      }
+    });
+
     if (flashcard) {
       flashcard.addEventListener('click', (e) => {
         const yesBtn = document.querySelector('#prompt-yes');
@@ -264,11 +280,62 @@ class StudyScreen {
     }
 
     speakerBtns.forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+      let pressTimer;
+      let isLongPress = false;
+      
+      const handleSpeech = async (e) => {
         e.stopPropagation();
         const text = btn.dataset.text;
         const lang = btn.dataset.lang;
-        await speechService.speak(text, lang);
+        
+        // Remove existing service classes
+        btn.classList.remove('local-voice', 'responsive-voice');
+        
+        // Speak and get the service used
+        const serviceUsed = await speechService.speak(text, lang);
+        
+        // Add the appropriate class to indicate which service was used
+        if (serviceUsed === 'responsive') {
+          btn.classList.add('responsive-voice');
+        } else {
+          btn.classList.add('local-voice');
+        }
+      };
+      
+      const startPress = (e) => {
+        e.preventDefault();
+        isLongPress = false;
+        
+        pressTimer = setTimeout(() => {
+          isLongPress = true;
+          speechService.promptForApiKey('en', true); // Show configuration dialog
+        }, 500); // 500ms for long press
+      };
+      
+      const endPress = (e) => {
+        clearTimeout(pressTimer);
+        
+        if (!isLongPress) {
+          // Regular click - speak the text
+          handleSpeech(e);
+        }
+      };
+      
+      // Mouse events
+      btn.addEventListener('mousedown', startPress);
+      btn.addEventListener('mouseup', endPress);
+      btn.addEventListener('mouseleave', endPress);
+      
+      // Touch events
+      btn.addEventListener('touchstart', startPress, { passive: false });
+      btn.addEventListener('touchend', endPress);
+      btn.addEventListener('touchcancel', endPress);
+      
+      // Prevent context menu on long press
+      btn.addEventListener('contextmenu', (e) => {
+        if (isLongPress) {
+          e.preventDefault();
+        }
       });
     });
 
