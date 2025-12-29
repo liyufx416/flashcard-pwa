@@ -2,6 +2,7 @@
 import WelcomeScreen from './screens/welcomeScreen.js';
 import StudyScreen from './screens/studyScreen.js';
 import ManageCardsScreen from './screens/manageCardsScreen.js';
+import VersionManager from './utils/versionManager.js';
 
 // Main App Class
 class FlashcardApp {
@@ -12,9 +13,18 @@ class FlashcardApp {
   }
 
   // Initialize the app
-  init() {
-    this.showWelcomeScreen();
-    this.registerServiceWorker();
+  async init() {
+    try {
+      await VersionManager.checkVersionAndReload();
+      // If we reach here, no reload was needed, so continue with app initialization
+      this.showWelcomeScreen();
+      this.registerServiceWorker();
+    } catch (error) {
+      console.error('Error during version check:', error);
+      // Continue with app initialization even if version check fails
+      this.showWelcomeScreen();
+      this.registerServiceWorker();
+    }
   }
 
   // Show welcome screen
@@ -67,6 +77,6 @@ class FlashcardApp {
 
 // Initialize the app when the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', () => {
-  const app = new FlashcardApp();
-  app.init();
+  window.app = new FlashcardApp();
+  window.app.init();
 });

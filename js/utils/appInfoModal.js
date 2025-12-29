@@ -1,3 +1,5 @@
+import VersionManager from './versionManager.js';
+
 class AppInfoModal {
   static async show() {
     try {
@@ -17,7 +19,9 @@ class AppInfoModal {
           <div class="modal-content">
             <div class="modal-body">
               <div class="app-info-header">
-                <span class="app-info-name">${manifest.short_name}</span> <span class="app-info-version">(v${manifest.version})</span>
+                <table> <tr><td><span class="app-info-icon"/></td>
+                <td><div class="app-info-name">${manifest.short_name}</div><div class="app-info-version">Version ${manifest.version}</div></td>
+                <td><button class="check-update-btn" id="check-update-btn" title="Check Update">↻</button></span></td></tr></table>
               </div>
               <div class="credits-content">
                 ${creditsHtml}
@@ -32,6 +36,46 @@ class AppInfoModal {
 
       // Setup event listeners
       const modal = document.getElementById('app-info-modal');
+      const checkUpdateBtn = document.getElementById('check-update-btn');
+
+      // Check update button event listener
+      if (checkUpdateBtn) {
+        checkUpdateBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          checkUpdateBtn.textContent = '⟳'; // Spinning refresh icon
+          checkUpdateBtn.disabled = true;
+          checkUpdateBtn.classList.add('checking');
+          
+          try {
+            const reloadTriggered = await VersionManager.checkVersionAndReload();
+            
+            // If we reach here, no reload was triggered, so show checkmark
+            if (!reloadTriggered) {
+              checkUpdateBtn.textContent = '✓'; // Green checkmark
+              checkUpdateBtn.classList.remove('checking');
+              checkUpdateBtn.classList.add('up-to-date');
+              
+              setTimeout(() => {
+                checkUpdateBtn.textContent = '↻'; // Back to refresh icon
+                checkUpdateBtn.disabled = false;
+                checkUpdateBtn.classList.remove('up-to-date');
+              }, 2000);
+            }
+            // If reload was triggered, the page will reload and this code won't continue
+          } catch (error) {
+            console.error('Error checking for updates:', error);
+            checkUpdateBtn.textContent = '✗'; // Red X for error
+            checkUpdateBtn.classList.remove('checking');
+            checkUpdateBtn.classList.add('error');
+            
+            setTimeout(() => {
+              checkUpdateBtn.textContent = '↻'; // Back to refresh icon
+              checkUpdateBtn.disabled = false;
+              checkUpdateBtn.classList.remove('error');
+            }, 2000);
+          }
+        });
+      }
 
       const closeModal = () => {
         modal.remove();
