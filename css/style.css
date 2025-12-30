@@ -933,18 +933,13 @@ input:checked + .toggle-slider:before {
   background: var(--primary-color);
 }
 
-.speaker-btn.responsive-voice {
-  background: var(--background-end);
-}
-
-.speaker-btn:hover {
-  background: var(--secondary-color);
-  color: var(--primary-dark);
-}
-
 .speaker-btn.local-voice:hover {
   background: var(--primary-light);
   color: white;
+}
+
+.speaker-btn.responsive-voice {
+  background: var(--background-end);
 }
 
 .speaker-btn.responsive-voice:hover {
@@ -964,6 +959,144 @@ input:checked + .toggle-slider:before {
 
 .speaker-btn-small {
   padding: 0.35rem;
+}
+
+/* Translation Practice Styles */
+.translation-practice {
+  margin-top: auto;
+  padding-top: 1rem;
+  width: 100%;
+}
+
+.translation-input-container {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.translation-input {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid var(--border-color);
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: white;
+  color: var(--background-end);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  height: 2.5rem;
+}
+
+.translation-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.translation-input::placeholder {
+  color: var(--text-light);
+  opacity: 0.7;
+}
+
+.check-translation-btn {
+  width: 2.5rem;
+  height: 2.5rem;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.check-translation-btn:hover {
+  background: var(--primary-dark);
+}
+
+.check-translation-btn:active {
+  transform: scale(0.95);
+}
+
+.check-translation-btn:disabled {
+  background: #ccc;
+  color: #999;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.check-translation-btn:disabled:hover {
+  background: #ccc;
+}
+
+.check-translation-btn svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+/* Check button feedback states */
+.check-translation-btn.perfect {
+  background: #28a745;
+  color: white;
+  border: 1px solid #28a745;
+}
+
+.check-translation-btn.partial {
+  background: #ffc107;
+  color: #212529;
+  border: 1px solid #ffc107;
+}
+
+.check-translation-btn.nomatch {
+  background: #dc3545;
+  color: white;
+  border: 1px solid #dc3545;
+}
+
+.check-translation-btn.nomatch svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+/* Difficulty recommendation flashing */
+.difficulty-btn.recommendation {
+  animation: flashRecommendation 2s ease-in-out 3;
+  border-color: currentColor !important;
+  box-shadow: 0 0 15px currentColor !important;
+}
+
+@keyframes flashRecommendation {
+  0%, 100% {
+    transform: scale(1);
+    border-color: currentColor;
+    box-shadow: 0 0 5px currentColor;
+  }
+  50% {
+    transform: scale(1.05);
+    border-color: currentColor;
+    box-shadow: 0 0 20px currentColor;
+  }
+}
+
+/* Responsive adjustments for translation practice */
+@media (max-width: 320px) {
+  .translation-input-container {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .translation-input {
+    width: 100%;
+  }
+  
+  .check-translation-btn {
+    width: 100%;
+    min-width: auto;
+  }
 }
 
 .example-container {
@@ -1346,6 +1479,57 @@ p {
   background-color: var(--primary-color);
 }
 
+.btn-success {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  box-shadow: 0 1px 3px 0 rgba(40, 167, 69, 0.3), 0 1px 2px 0 rgba(40, 167, 69, 0.2);
+}
+
+.btn-success:hover:not(:disabled) {
+  background-color: #218838;
+}
+
+/* Loading Spinner Styles */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.spinner-container {
+  text-align: center;
+  color: white;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top: 4px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 1rem;
+  margin: 0;
+  color: white;
+}
+
 @keyframes modalSlideIn {
   from {
     opacity: 0;
@@ -1475,7 +1659,7 @@ p {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 2rem;
+  padding: 0.5rem;
   height: 100%;
 }
 
@@ -1495,14 +1679,14 @@ p {
 
 .prompt-buttons {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
   justify-content: center;
 }
 
 .prompt-buttons .btn {
-  min-width: 100px;
-  padding: 0.75rem 1.5rem;
+  min-width: 80px;
+  padding: 0.75rem 1.25rem;
 }
 
 /* Skip button styles (keeping for reference if needed) */
