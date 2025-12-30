@@ -1,6 +1,7 @@
 const DB_NAME = 'FlashcardDB';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const CARD_STORE = 'cards';
+const DECK_STORE = 'decks';
 
 class CardDatabase {
   constructor() {
@@ -19,26 +20,41 @@ class CardDatabase {
 
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
-        const transaction = event.target.transaction;
+        const oldVersion = event.oldVersion;
         
-        // Delete old object store if it exists (to recreate with correct indexes)
-        if (db.objectStoreNames.contains(CARD_STORE)) {
-          db.deleteObjectStore(CARD_STORE);
+        console.log(`Upgrading database from version ${oldVersion} to ${DB_VERSION}`);
+        
+        // Create card store if it doesn't exist (new installation)
+        if (!db.objectStoreNames.contains(CARD_STORE)) {
+          const objectStore = db.createObjectStore(CARD_STORE, { 
+            keyPath: ['languagePair', 'word', 'type'] 
+          });
+          
+          objectStore.createIndex('languagePair', 'languagePair', { unique: false });
+          objectStore.createIndex('rank', 'rank', { unique: false });
+          objectStore.createIndex('stats.difficulty', 'stats.difficulty', { unique: false });
+          objectStore.createIndex('stats.lastReviewed', 'stats.lastReviewed', { unique: false });
+          
+          console.log('Created cards object store');
         }
         
-        // Create object store with correct structure
-        const objectStore = db.createObjectStore(CARD_STORE, { 
-          keyPath: ['languagePair', 'word', 'type'] 
-        });
-        
-        objectStore.createIndex('languagePair', 'languagePair', { unique: false });
-        objectStore.createIndex('rank', 'rank', { unique: false });
-        objectStore.createIndex('stats.difficulty', 'stats.difficulty', { unique: false });
-        objectStore.createIndex('stats.lastReviewed', 'stats.lastReviewed', { unique: false });
+        // Handle version 4 to 5 migration (add decks store)
+        if (oldVersion < 5) {
+          // Create decks object store
+          const deckStore = db.createObjectStore(DECK_STORE, { 
+            keyPath: ['languagePair', 'deckName'] 
+          });
+          
+          deckStore.createIndex('languagePair', 'languagePair', { unique: false });
+          deckStore.createIndex('deckName', 'deckName', { unique: false });
+          
+          console.log('Created decks object store for version 5');
+        }
       };
     });
   }
 
+  
   async saveCard(languagePair, cardData) {
     if (!this.db) await this.init();
     
@@ -192,10 +208,26 @@ class CardDatabase {
     });
   }
 
-  async getDifficultyCounts(languagePair, timeFilter = null) {
+  async getDifficultyCounts(languagePair, timeFilter = null, deckFilter = null) {
     if (!this.db) await this.init();
     
     let cards = await this.getAllCards(languagePair);
+    
+    // Apply deck filter if provided
+    if (deckFilter && deckFilter !== 'all') {
+      const deck = await this.getDeck(languagePair, deckFilter);
+      if (deck) {
+        const deckCardKeys = new Set(
+          deck.cards.map(card => `${card.word}-${card.type}`)
+        );
+        cards = cards.filter(card => 
+          deckCardKeys.has(`${card.word}-${card.type}`)
+        );
+      } else {
+        // Deck not found, return empty counts
+        return { new: 0, easy: 0, medium: 0, hard: 0 };
+      }
+    }
     
     // Apply time filter if provided
     if (timeFilter) {
@@ -262,10 +294,26 @@ class CardDatabase {
     });
   }
 
-  async getFilteredCards(languagePair, difficultyFilters, timeFilter = null) {
+  async getFilteredCards(languagePair, difficultyFilters, timeFilter = null, deckFilter = null) {
     if (!this.db) await this.init();
     
     let cards = await this.getAllCards(languagePair);
+    
+    // Apply deck filter if provided
+    if (deckFilter && deckFilter !== 'all') {
+      const deck = await this.getDeck(languagePair, deckFilter);
+      if (deck) {
+        const deckCardKeys = new Set(
+          deck.cards.map(card => `${card.word}-${card.type}`)
+        );
+        cards = cards.filter(card => 
+          deckCardKeys.has(`${card.word}-${card.type}`)
+        );
+      } else {
+        // Deck not found, return empty array
+        return [];
+      }
+    }
     
     // Apply time filter first
     if (timeFilter) {
@@ -295,6 +343,94 @@ class CardDatabase {
         return true;
       }
       return false;
+    });
+  }
+
+  async saveDeck(languagePair, deckName, deckData, overwrite = false) {
+    if (!this.db) await this.init();
+    
+    return new Promise(async (resolve, reject) => {
+      try {
+        // Check if deck already exists
+        const existingDeck = await this.getDeck(languagePair, deckName);
+        
+        let finalDeck;
+        
+        if (existingDeck && !overwrite) {
+          // Merge mode: combine existing and new cards, avoid duplicates
+          const existingCardKeys = new Set(
+            existingDeck.cards.map(card => `${card.word}-${card.type}`)
+          );
+          
+          const newCards = deckData.cards.filter(card => 
+            !existingCardKeys.has(`${card.word}-${card.type}`)
+          ).map(card => ({
+            word: card.word,
+            type: card.type
+          }));
+          
+          finalDeck = {
+            languagePair,
+            deckName,
+            cards: [...existingDeck.cards, ...newCards],
+            createdAt: existingDeck.createdAt,
+            updatedAt: Date.now()
+          };
+          
+          console.log(`Merged deck "${deckName}": added ${newCards.length} new cards`);
+        } else {
+          // Overwrite mode or new deck
+          finalDeck = {
+            languagePair,
+            deckName,
+            cards: deckData.cards.map(card => ({
+              word: card.word,
+              type: card.type
+            })),
+            createdAt: existingDeck?.createdAt || Date.now(),
+            updatedAt: Date.now()
+          };
+          
+          console.log(`${existingDeck ? 'Overwrote' : 'Created'} deck "${deckName}" with ${finalDeck.cards.length} cards`);
+        }
+        
+        const transaction = this.db.transaction([DECK_STORE], 'readwrite');
+        const store = transaction.objectStore(DECK_STORE);
+        const request = store.put(finalDeck);
+        
+        request.onsuccess = () => resolve(finalDeck);
+        request.onerror = () => reject(request.error);
+        
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  async getDeck(languagePair, deckName) {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([DECK_STORE], 'readonly');
+      const store = transaction.objectStore(DECK_STORE);
+      const request = store.get([languagePair, deckName]);
+      
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getAllDecks(languagePair) {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([DECK_STORE], 'readonly');
+      const store = transaction.objectStore(DECK_STORE);
+      const index = store.index('languagePair');
+      const request = index.getAll(languagePair);
+      
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
     });
   }
 }

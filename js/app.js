@@ -3,6 +3,7 @@ import WelcomeScreen from './screens/welcomeScreen.js';
 import StudyScreen from './screens/studyScreen.js';
 import ManageCardsScreen from './screens/manageCardsScreen.js';
 import VersionManager from './utils/versionManager.js';
+import dataSyncService from './services/dataSyncService.js';
 
 // Main App Class
 class FlashcardApp {
@@ -31,21 +32,50 @@ class FlashcardApp {
   showWelcomeScreen() {
     this.currentScreen = new WelcomeScreen(
       this.container,
-      (languagePairId, reverseDirection, searchResults = null) => this.startStudy(languagePairId, reverseDirection, searchResults),
+      (languagePairId, reverseDirection, searchResults = null, deckFilter = null) => this.startStudy(languagePairId, reverseDirection, searchResults, deckFilter),
       () => this.showManageCardsScreen()
     );
     this.currentScreen.loadLanguagePairs();
+    
+    // Perform initial sync for the selected language pair to load deck data
+    this.performInitialSync();
+  }
+
+  // Perform initial sync for the currently selected language pair
+  async performInitialSync() {
+    try {
+      // Get the currently selected language pair from the welcome screen
+      const selectedLanguagePair = this.currentScreen.getSelectedLanguagePair();
+      
+      if (selectedLanguagePair) {
+        try {
+          console.log(`Performing initial sync for ${selectedLanguagePair}...`);
+          await dataSyncService.syncLanguagePair(selectedLanguagePair, false);
+          console.log(`Initial sync completed for ${selectedLanguagePair}`);
+          
+          // Load decks after sync completes
+          this.currentScreen.loadDecks();
+        } catch (error) {
+          console.error(`Initial sync failed for ${selectedLanguagePair}:`, error);
+        }
+      } else {
+        console.log('No language pair selected, skipping initial sync');
+      }
+    } catch (error) {
+      console.error('Error during initial sync:', error);
+    }
   }
 
   // Show study screen
-  startStudy(languagePairId, reverseDirection = false, searchResults = null) {
+  startStudy(languagePairId, reverseDirection = false, searchResults = null, deckFilter = null) {
     this.currentLanguagePair = languagePairId;
     this.currentScreen = new StudyScreen(
       this.container,
       languagePairId,
       reverseDirection,
       () => this.showWelcomeScreen(),
-      searchResults
+      searchResults,
+      deckFilter
     );
     this.currentScreen.loadCards();
   }

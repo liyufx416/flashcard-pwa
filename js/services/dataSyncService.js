@@ -87,8 +87,13 @@ class DataSyncService {
       console.log(`Syncing data for ${languagePairId}...`);
       const cards = data.cards || [];
       
-      await cardDB.bulkMergeCards(languagePairId, cards);
+      // Save cards to database
+      for (const card of cards) {
+        await cardDB.mergeCardData(languagePairId, card);
+      }
       
+      // Load and merge deck data
+      await this.loadAndMergeDecks(languagePairId, forceSync);
       await this.setStoredChecksum(languagePairId, checksum);
 
       console.log(`Sync complete for ${languagePairId}: ${cards.length} cards`);
@@ -124,14 +129,14 @@ class DataSyncService {
     return result;
   }
 
-  async getDifficultyCounts(languagePairId, timeFilter = null) {
+  async getDifficultyCounts(languagePairId, timeFilter = null, deckFilter = null) {
     await this.ensureDataLoaded(languagePairId);
-    return await cardDB.getDifficultyCounts(languagePairId, timeFilter);
+    return await cardDB.getDifficultyCounts(languagePairId, timeFilter, deckFilter);
   }
 
-  async getFilteredCards(languagePairId, difficultyFilters, timeFilter = null) {
+  async getFilteredCards(languagePairId, difficultyFilters, timeFilter = null, deckFilter = null) {
     await this.ensureDataLoaded(languagePairId);
-    return await cardDB.getFilteredCards(languagePairId, difficultyFilters, timeFilter);
+    return await cardDB.getFilteredCards(languagePairId, difficultyFilters, timeFilter, deckFilter);
   }
 
   async getAllWords(languagePairId) {
@@ -150,6 +155,63 @@ class DataSyncService {
 
   async deleteCard(languagePairId, word, type) {
     return await cardDB.deleteCard(languagePairId, word, type);
+  }
+
+  async getAllDecks(languagePairId) {
+    return await cardDB.getAllDecks(languagePairId);
+  }
+
+  async loadAndMergeDecks(languagePairId, forceSync = false) {
+    try {
+      // Try to load deck data
+      const deckResponse = await fetch(`/data/${languagePairId}.decks.json`, {
+        cache: forceSync ? "reload" : "default"
+      });
+      
+      if (!deckResponse.ok) {
+        console.log(`No deck file found for ${languagePairId}`);
+        return;
+      }
+      
+      const deckData = await deckResponse.json();
+      console.log(`Loading deck data for ${languagePairId}: ${deckData.decks?.length || 0} decks`);
+      
+      // Process each deck
+      for (const deck of deckData.decks || []) {
+        // Save deck structure to database
+        await cardDB.saveDeck(languagePairId, deck.name, deck);
+        
+        // Merge deck cards into main cards collection
+        for (const deckCard of deck.cards || []) {
+          // Check if card already exists
+          const existingCard = await cardDB.getCard(languagePairId, deckCard.word, deckCard.type);
+          
+          if (!existingCard) {
+            // Card doesn't exist, add it from deck
+            await cardDB.saveCard(languagePairId, {
+              ...deckCard,
+              rank: deckCard.rank || null,
+              example: deckCard.example || '',
+              range_count: deckCard.range_count || null,
+              frequency: deckCard.frequency || null,
+              stats: {
+                difficulty: null,
+                lastReviewed: null,
+                reviewCount: 0
+              }
+            });
+            console.log(`Added new card from deck: ${deckCard.word} (${deckCard.type})`);
+          } else {
+            // Card exists, keep original data (deck data doesn't override)
+            console.log(`Card already exists, keeping original: ${deckCard.word} (${deckCard.type})`);
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error(`Error loading deck data for ${languagePairId}:`, error);
+      // Don't throw error - deck loading is optional
+    }
   }
 }
 

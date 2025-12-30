@@ -3,12 +3,13 @@ import speechService from '../utils/speechService.js';
 import AppInfoModal from '../utils/appInfoModal.js';
 
 class StudyScreen {
-  constructor(container, languagePairId, reverseDirection, onBack, searchResults = null) {
+  constructor(container, languagePairId, reverseDirection, onBack, searchResults = null, deckFilter = null) {
     this.container = container;
     this.languagePairId = languagePairId;
     this.reverseDirection = reverseDirection;
     this.onBack = onBack;
     this.searchResults = searchResults;
+    this.deckFilter = deckFilter;
     this.cards = [];
     this.languagePair = null;
     this.currentCardIndex = 0;
@@ -17,6 +18,31 @@ class StudyScreen {
     this.languagePairs = [];
     this.cardCheckAttempts = new Map(); // Track check attempts per card
     this.cardRecommendations = new Map(); // Track recommendation level per card
+  }
+
+  checkResponsiveLayout() {
+    // Check if previous/next buttons are visible
+    const prevBtn = this.container.querySelector('#prev-btn');
+    const nextBtn = this.container.querySelector('#next-btn');
+    const difficultyButtons = this.container.querySelector('.difficulty-buttons');
+    
+    if (prevBtn && nextBtn && difficultyButtons) {
+      const prevBtnRect = prevBtn.getBoundingClientRect();
+      const nextBtnRect = nextBtn.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      
+      // If either button bottom is below viewport fold, arrange difficulty buttons horizontally
+      if (prevBtnRect.bottom > viewportHeight || nextBtnRect.bottom > viewportHeight) {
+        difficultyButtons.style.flexDirection = 'row';
+        difficultyButtons.style.gap = '0.5rem';
+        difficultyButtons.style.justifyContent = 'center';
+        console.log('Difficulty buttons arranged horizontally - nav buttons not visible');
+      } else {
+        difficultyButtons.style.flexDirection = 'column';
+        difficultyButtons.style.gap = '0.5rem';
+        console.log('Difficulty buttons arranged vertically - nav buttons visible');
+      }
+    }
   }
 
   getTimeFilter() {
@@ -91,7 +117,7 @@ class StudyScreen {
         console.log(`Using search results: ${this.cards.length} words`);
       } else {
         // Load cards from IndexedDB with automatic sync and time filter
-        this.cards = await dataSyncService.getFilteredCards(this.languagePairId, effectiveFilters, timeFilter);
+        this.cards = await dataSyncService.getFilteredCards(this.languagePairId, effectiveFilters, timeFilter, this.deckFilter);
       }
 
       this.currentCardIndex = 0;
@@ -268,6 +294,14 @@ class StudyScreen {
     `;
 
     this.setupEventListeners();
+    
+    // Add responsive layout check
+    this.checkResponsiveLayout();
+    
+    // Add resize listener for responsive behavior
+    window.addEventListener('resize', () => {
+      this.checkResponsiveLayout();
+    });
   }
 
   setupEventListeners() {
