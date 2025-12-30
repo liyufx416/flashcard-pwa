@@ -1530,6 +1530,11 @@ p {
   color: white;
 }
 
+/* Hide manage cards button */
+#manage-cards {
+  display: none;
+}
+
 @keyframes modalSlideIn {
   from {
     opacity: 0;
