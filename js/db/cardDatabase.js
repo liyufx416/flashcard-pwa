@@ -20,35 +20,41 @@ class CardDatabase {
 
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
-        const transaction = event.target.transaction;
+        const oldVersion = event.oldVersion;
         
-        // Delete old object store if it exists (to recreate with correct indexes)
-        if (db.objectStoreNames.contains(CARD_STORE)) {
-          db.deleteObjectStore(CARD_STORE);
+        console.log(`Upgrading database from version ${oldVersion} to ${DB_VERSION}`);
+        
+        // Create card store if it doesn't exist (new installation)
+        if (!db.objectStoreNames.contains(CARD_STORE)) {
+          const objectStore = db.createObjectStore(CARD_STORE, { 
+            keyPath: ['languagePair', 'word', 'type'] 
+          });
+          
+          objectStore.createIndex('languagePair', 'languagePair', { unique: false });
+          objectStore.createIndex('rank', 'rank', { unique: false });
+          objectStore.createIndex('stats.difficulty', 'stats.difficulty', { unique: false });
+          objectStore.createIndex('stats.lastReviewed', 'stats.lastReviewed', { unique: false });
+          
+          console.log('Created cards object store');
         }
         
-        // Create object store with correct structure
-        const objectStore = db.createObjectStore(CARD_STORE, { 
-          keyPath: ['languagePair', 'word', 'type'] 
-        });
-        
-        objectStore.createIndex('languagePair', 'languagePair', { unique: false });
-        objectStore.createIndex('rank', 'rank', { unique: false });
-        objectStore.createIndex('stats.difficulty', 'stats.difficulty', { unique: false });
-        objectStore.createIndex('stats.lastReviewed', 'stats.lastReviewed', { unique: false });
-        
-        // Create decks object store (always create in version 5 upgrade)
-        const deckStore = db.createObjectStore(DECK_STORE, { 
-          keyPath: ['languagePair', 'deckName'] 
-        });
-        
-        deckStore.createIndex('languagePair', 'languagePair', { unique: false });
-        deckStore.createIndex('deckName', 'deckName', { unique: false });
-        
-              };
+        // Handle version 4 to 5 migration (add decks store)
+        if (oldVersion < 5) {
+          // Create decks object store
+          const deckStore = db.createObjectStore(DECK_STORE, { 
+            keyPath: ['languagePair', 'deckName'] 
+          });
+          
+          deckStore.createIndex('languagePair', 'languagePair', { unique: false });
+          deckStore.createIndex('deckName', 'deckName', { unique: false });
+          
+          console.log('Created decks object store for version 5');
+        }
+      };
     });
   }
 
+  
   async saveCard(languagePair, cardData) {
     if (!this.db) await this.init();
     
