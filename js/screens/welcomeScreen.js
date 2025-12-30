@@ -325,7 +325,8 @@ class WelcomeScreen {
                 <datalist id="search-history"></datalist>
               </div>
               <div class="search-buttons">
-                <button id="exact-search-btn" class="btn btn-primary">Exact Match</button>
+                <button id="exact-search-btn" class="btn btn-primary">Exact Word</button>
+                <button id="partial-search-btn" class="btn btn-secondary">Partial Match</button>
                 <button id="fuzzy-search-btn" class="btn btn-secondary">Fuzzy Match</button>
               </div>
             </div>
@@ -617,6 +618,7 @@ class WelcomeScreen {
     const searchInput = this.container.querySelector('#search-input');
     const closeBtn = this.container.querySelector('#close-search');
     const exactSearchBtn = this.container.querySelector('#exact-search-btn');
+    const partialSearchBtn = this.container.querySelector('#partial-search-btn');
     const fuzzySearchBtn = this.container.querySelector('#fuzzy-search-btn');
     const searchBtn = this.container.querySelector('#search-btn');
 
@@ -670,16 +672,25 @@ class WelcomeScreen {
     // Exact search button
     if (exactSearchBtn) {
       const exactSearchHandler = () => {
-        this.performSearch(true);
+        this.performSearch('exact');
       };
       exactSearchBtn.onclick = exactSearchHandler;
       this.searchPanelEventListeners.push({ type: 'click', handler: exactSearchHandler, target: exactSearchBtn });
     }
 
+    // Partial search button
+    if (partialSearchBtn) {
+      const partialSearchHandler = () => {
+        this.performSearch('partial');
+      };
+      partialSearchBtn.onclick = partialSearchHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: partialSearchHandler, target: partialSearchBtn });
+    }
+
     // Fuzzy search button
     if (fuzzySearchBtn) {
       const fuzzySearchHandler = () => {
-        this.performSearch(false);
+        this.performSearch('fuzzy');
       };
       fuzzySearchBtn.onclick = fuzzySearchHandler;
       this.searchPanelEventListeners.push({ type: 'click', handler: fuzzySearchHandler, target: fuzzySearchBtn });
@@ -688,7 +699,7 @@ class WelcomeScreen {
     // Enter key to search, Escape to close
     const keyHandler = (e) => {
       if (e.key === 'Enter') {
-        this.performSearch(true); // Default to exact search on Enter
+        this.performSearch('exact'); // Default to exact search on Enter
       } else if (e.key === 'Escape') {
         this.cleanupSearchPanel();
       }
@@ -785,12 +796,20 @@ class WelcomeScreen {
     });
   }
 
-  async performSearch(isExact) {
+  async performSearch(searchMode) {
     const searchInput = this.container.querySelector('#search-input');
     const searchTerm = searchInput.value.trim();
     
     if (!searchTerm) {
-      alert('Please enter a search term');
+      // Focus on search input and add animated highlight
+      searchInput.focus();
+      searchInput.classList.add('search-input-error');
+      
+      // Remove highlight after animation
+      setTimeout(() => {
+        searchInput.classList.remove('search-input-error');
+      }, 2000);
+      
       return;
     }
 
@@ -813,35 +832,43 @@ class WelcomeScreen {
       }
 
       let searchResults;
-      let fuseOptions;
       
-      if (isExact) {
-        // Fuzzy search using Fuse.js
-        fuseOptions = {
-          keys: ['word', 'translation'],
-          threshold: 0.0, // 0 = exact match
-          isCaseSensitive: false,
-          includeScore: true,
-          ignoreLocation: true,
-          tokenize: true,
-          minMatchCharLength: 2
-        };
+      if (searchMode === 'exact') {
+        // Exact word match with word boundaries (case insensitive)
+        const searchTermLower = searchTerm.toLowerCase();
+        
+        // Create regex to match whole word boundaries
+        const wordRegex = new RegExp(`\\b${searchTermLower}\\b`, 'i');
+        
+        searchResults = filteredWords.filter(word => {
+          // Check if search term matches as a whole word in either word or translation
+          const wordMatch = wordRegex.test(word.word);
+          const translationMatch = wordRegex.test(word.translation);
+          return wordMatch || translationMatch;
+        });
+      } else if (searchMode === 'partial') {
+        // Partial match (case insensitive)
+        const searchTermLower = searchTerm.toLowerCase();
+        searchResults = filteredWords.filter(word => 
+          word.word.toLowerCase().includes(searchTermLower) || 
+          word.translation.toLowerCase().includes(searchTermLower)
+        );
       } else {
         // Fuzzy search using Fuse.js
-        fuseOptions = {
+        const fuseOptions = {
           keys: ['word', 'translation'],
-          threshold: 0.5, // Lower threshold = more strict matching
+          threshold: 0.3, // Lower threshold = more strict matching
           isCaseSensitive: false,
           includeScore: true,
           ignoreLocation: true,
           tokenize: true,
           minMatchCharLength: 2
         };
-      }
 
-      const fuse = new Fuse(filteredWords, fuseOptions);
-      const fuseResults = fuse.search(searchTerm);
-      searchResults = fuseResults.map(result => result.item);
+        const fuse = new Fuse(filteredWords, fuseOptions);
+        const fuseResults = fuse.search(searchTerm);
+        searchResults = fuseResults.map(result => result.item);
+      }
 
       if (searchResults.length === 0) {
         alert(`No words found matching "${searchTerm}"`);
@@ -856,7 +883,8 @@ class WelcomeScreen {
       this.cleanupSearchPanel();
 
       // Start study session with search results
-      console.log(`Found ${searchResults.length} words matching "${searchTerm}" (${isExact ? 'exact' : 'fuzzy'} match)`);
+      const searchModeText = searchMode === 'exact' ? 'exact word' : searchMode === 'partial' ? 'partial' : 'fuzzy';
+      console.log(`Found ${searchResults.length} words matching "${searchTerm}" (${searchModeText} match)`);
       this.onStartStudy(this.selectedLanguagePair, this.container.querySelector('#reverse-direction').checked, searchResults);
 
     } catch (error) {
