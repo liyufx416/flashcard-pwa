@@ -11,6 +11,26 @@ class WelcomeScreen {
     this.selectedLanguagePair = null;
   }
 
+  checkResponsiveLayout() {
+    // Check if manage button is visible
+    const manageBtn = this.container.querySelector('#manage-cards');
+    const statsSection = this.container.querySelector('.stats-section');
+    
+    if (manageBtn && statsSection) {
+      const manageBtnRect = manageBtn.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      
+      // If manage button bottom is below viewport fold, hide stats panel
+      if (manageBtnRect.bottom > viewportHeight) {
+        statsSection.style.display = 'none';
+        console.log('Stats panel hidden - manage button not visible');
+      } else {
+        statsSection.style.display = 'block';
+        console.log('Stats panel visible - manage button visible');
+      }
+    }
+  }
+
   getTimeFilter() {
     const savedTimeFilter = localStorage.getItem('timeFilter');
     if (!savedTimeFilter) return null;
@@ -691,6 +711,14 @@ class WelcomeScreen {
         AppInfoModal.show();
       });
     }
+
+    // Add responsive layout check
+    this.checkResponsiveLayout();
+    
+    // Add resize listener for responsive behavior
+    window.addEventListener('resize', () => {
+      this.checkResponsiveLayout();
+    });
   }
 
   updateSpeechStatus() {

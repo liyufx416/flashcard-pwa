@@ -20,6 +20,31 @@ class StudyScreen {
     this.cardRecommendations = new Map(); // Track recommendation level per card
   }
 
+  checkResponsiveLayout() {
+    // Check if previous/next buttons are visible
+    const prevBtn = this.container.querySelector('#prev-btn');
+    const nextBtn = this.container.querySelector('#next-btn');
+    const difficultyButtons = this.container.querySelector('.difficulty-buttons');
+    
+    if (prevBtn && nextBtn && difficultyButtons) {
+      const prevBtnRect = prevBtn.getBoundingClientRect();
+      const nextBtnRect = nextBtn.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      
+      // If either button bottom is below viewport fold, arrange difficulty buttons horizontally
+      if (prevBtnRect.bottom > viewportHeight || nextBtnRect.bottom > viewportHeight) {
+        difficultyButtons.style.flexDirection = 'row';
+        difficultyButtons.style.gap = '0.5rem';
+        difficultyButtons.style.justifyContent = 'center';
+        console.log('Difficulty buttons arranged horizontally - nav buttons not visible');
+      } else {
+        difficultyButtons.style.flexDirection = 'column';
+        difficultyButtons.style.gap = '0.5rem';
+        console.log('Difficulty buttons arranged vertically - nav buttons visible');
+      }
+    }
+  }
+
   getTimeFilter() {
     const savedTimeFilter = localStorage.getItem('timeFilter');
     if (!savedTimeFilter) return null;
@@ -269,6 +294,14 @@ class StudyScreen {
     `;
 
     this.setupEventListeners();
+    
+    // Add responsive layout check
+    this.checkResponsiveLayout();
+    
+    // Add resize listener for responsive behavior
+    window.addEventListener('resize', () => {
+      this.checkResponsiveLayout();
+    });
   }
 
   setupEventListeners() {
