@@ -120,7 +120,7 @@ class WelcomeScreen {
     }
   }
 
-  async updateDifficultyCounts() {
+  async updateDifficultyCounts(forceSync = false) {
     if (!this.selectedLanguagePair) return;
 
     const buttons = this.container.querySelectorAll('.difficulty-filter-btn');
@@ -129,8 +129,15 @@ class WelcomeScreen {
     const startStudyBtn = this.container.querySelector('#start-study');
 
     try {
+      // Show spinner when force syncing
+      if (forceSync) {
+        this.showLoadingSpinner();
+      }
+
       // Load counts from IndexedDB with automatic sync and time filter
-      const counts = await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null);
+      const counts = forceSync 
+        ? await dataSyncService.forceSyncLanguagePair(this.selectedLanguagePair).then(() => dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null))
+        : await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null);
 
       buttons.forEach((btn) => {
         const key = btn.dataset.filter;
@@ -187,6 +194,11 @@ class WelcomeScreen {
       }
     } catch (error) {
       console.error('Error loading card counts:', error);
+    } finally {
+      // Always hide spinner when done
+      if (forceSync) {
+        this.hideLoadingSpinner();
+      }
     }
   }
 
@@ -241,10 +253,9 @@ class WelcomeScreen {
           <div class="header-placeholder"></div>
         </header>
         <div class="screen-content">
-          <p><b>Master vocabularies of foreign languages with FlashCard App</b></p>
           <div class="language-selector">
             <div class="language-selector-row">
-              <label for="language-pair">Language Pair</label>
+              <label for="language-pair">Learning: </label>
               <div class="direction-toggle">
                 <label class="toggle-switch">
                   <input type="checkbox" id="reverse-direction" ${reverseDirectionChecked ? 'checked' : ''}>
@@ -293,8 +304,39 @@ class WelcomeScreen {
           </div>
           ${this.renderTimeFilter()}
           <div class="button-container">
-            <button id="start-study" class="btn btn-primary">Start Studying</button>
+            <div class="study-search-row">
+              <button id="start-study" class="btn btn-primary study-btn">Start Studying</button>
+              <button id="search-btn" class="btn btn-secondary search-btn" title="Search words">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                </svg>
+              </button>
+            </div>
             <button id="manage-cards" class="btn btn-secondary">Manage Cards</button>
+          </div>
+          <div id="search-panel" class="search-panel hidden">
+            <div class="search-panel-content">
+              <div class="search-header">
+                <h3>Search Words</h3>
+                <button id="close-search" class="close-btn">×</button>
+              </div>
+              <div class="search-input-container">
+                <input type="text" id="search-input" placeholder="Enter search pattern..." class="search-input" list="search-history" autocomplete="off">
+                <datalist id="search-history"></datalist>
+              </div>
+              <div class="search-buttons">
+                <button id="exact-search-btn" class="btn btn-primary">Exact Word</button>
+                <button id="partial-search-btn" class="btn btn-secondary">Partial Match</button>
+                <button id="fuzzy-search-btn" class="btn btn-secondary">Fuzzy Match</button>
+              </div>
+            </div>
+          </div>
+        
+        <!-- Loading Spinner Overlay -->
+        <div class="loading-overlay" id="loading-overlay" style="display: none;">
+          <div class="spinner-container">
+            <div class="spinner"></div>
+            <p class="loading-text">Loading language data...</p>
           </div>
         </div>
       </div>
@@ -352,6 +394,7 @@ class WelcomeScreen {
   setupEventListeners() {
     const languageSelect = this.container.querySelector('#language-pair');
     const startStudyBtn = this.container.querySelector('#start-study');
+    const searchBtn = this.container.querySelector('#search-btn');
     const manageCardsBtn = this.container.querySelector('#manage-cards');
     const reverseDirection = this.container.querySelector('#reverse-direction');
     const filterButtons = this.container.querySelectorAll('.difficulty-filter-btn');
@@ -498,7 +541,7 @@ class WelcomeScreen {
         localStorage.setItem('selectedLanguagePair', this.selectedLanguagePair);
       }
 
-      this.updateDifficultyCounts();
+      this.updateDifficultyCounts(true); // Force sync when language changes
     });
 
     startStudyBtn.addEventListener('click', () => {
@@ -506,6 +549,13 @@ class WelcomeScreen {
         this.onStartStudy(this.selectedLanguagePair, reverseDirection.checked);
       }
     });
+
+    // Search functionality
+    if (searchBtn) {
+      searchBtn.addEventListener('click', () => {
+        this.showSearchPanel();
+      });
+    }
 
     manageCardsBtn.addEventListener('click', () => {
       this.onManageCards();
@@ -560,6 +610,300 @@ class WelcomeScreen {
         statusElement.textContent = 'Error';
         statusElement.style.color = '#dc3545';
       }
+    }
+  }
+
+  showSearchPanel() {
+    const searchPanel = this.container.querySelector('#search-panel');
+    const searchInput = this.container.querySelector('#search-input');
+    const closeBtn = this.container.querySelector('#close-search');
+    const exactSearchBtn = this.container.querySelector('#exact-search-btn');
+    const partialSearchBtn = this.container.querySelector('#partial-search-btn');
+    const fuzzySearchBtn = this.container.querySelector('#fuzzy-search-btn');
+    const searchBtn = this.container.querySelector('#search-btn');
+
+    if (!searchPanel || !searchInput) return;
+
+    // Show the panel
+    searchPanel.classList.remove('hidden');
+    searchInput.focus();
+    
+    // Initially remove the list attribute to prevent datalist from showing
+    searchInput.removeAttribute('list');
+    
+    // Update datalist and simulate a click to trigger it naturally
+    this.updateSearchHistoryDatalist();
+    
+    // Simulate a click to trigger the datalist dropdown
+    setTimeout(() => {
+      searchInput.setAttribute('list', 'search-history');
+      searchInput.click();
+    }, 1000);
+
+    // Store event listeners for cleanup
+    this.searchPanelEventListeners = [];
+
+    // Close panel when clicking outside (only if search input is empty)
+    const closeOnOutsideClick = (e) => {
+      // Check if click is outside the search panel and not on the search button
+      if (searchPanel==e.target || !searchPanel.contains(e.target)) {
+        // Only close if search input is empty or whitespace
+        if (searchInput.value.trim() === '') {
+          this.cleanupSearchPanel();
+        }
+      }
+    };
+
+    // Add outside click listener with a small delay to prevent immediate closing
+    setTimeout(() => {
+      document.addEventListener('click', closeOnOutsideClick);
+      this.searchPanelEventListeners.push({ type: 'click', handler: closeOnOutsideClick, target: document });
+    }, 100);
+
+    // Close button
+    if (closeBtn) {
+      const closeHandler = () => {
+        this.cleanupSearchPanel();
+      };
+      closeBtn.onclick = closeHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: closeHandler, target: closeBtn });
+    }
+
+    // Exact search button
+    if (exactSearchBtn) {
+      const exactSearchHandler = () => {
+        this.performSearch('exact');
+      };
+      exactSearchBtn.onclick = exactSearchHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: exactSearchHandler, target: exactSearchBtn });
+    }
+
+    // Partial search button
+    if (partialSearchBtn) {
+      const partialSearchHandler = () => {
+        this.performSearch('partial');
+      };
+      partialSearchBtn.onclick = partialSearchHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: partialSearchHandler, target: partialSearchBtn });
+    }
+
+    // Fuzzy search button
+    if (fuzzySearchBtn) {
+      const fuzzySearchHandler = () => {
+        this.performSearch('fuzzy');
+      };
+      fuzzySearchBtn.onclick = fuzzySearchHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: fuzzySearchHandler, target: fuzzySearchBtn });
+    }
+
+    // Enter key to search, Escape to close
+    const keyHandler = (e) => {
+      if (e.key === 'Enter') {
+        this.performSearch('exact'); // Default to exact search on Enter
+      } else if (e.key === 'Escape') {
+        this.cleanupSearchPanel();
+      }
+    };
+    searchInput.onkeydown = keyHandler;
+    this.searchPanelEventListeners.push({ type: 'keydown', handler: keyHandler, target: searchInput });
+
+    // Also close on Escape key anywhere in the panel
+    const closeOnEscape = (e) => {
+      if (e.key === 'Escape') {
+        this.cleanupSearchPanel();
+      }
+    };
+
+    document.addEventListener('keydown', closeOnEscape);
+    this.searchPanelEventListeners.push({ type: 'keydown', handler: closeOnEscape, target: document });
+  }
+
+  cleanupSearchPanel() {
+    // Clean up all event listeners
+    if (this.searchPanelEventListeners) {
+      this.searchPanelEventListeners.forEach(listener => {
+        if (listener.target === document) {
+          listener.target.removeEventListener(listener.type, listener.handler);
+        } else if (listener.target) {
+          listener.target.onclick = null;
+          listener.target.onkeydown = null;
+        }
+      });
+      this.searchPanelEventListeners = [];
+    }
+    
+    this.hideSearchPanel();
+  }
+
+  hideSearchPanel() {
+    const searchPanel = this.container.querySelector('#search-panel');
+    const searchInput = this.container.querySelector('#search-input');
+    
+    if (searchPanel) {
+      searchPanel.classList.add('hidden');
+    }
+    if (searchInput) {
+      searchInput.value = '';
+    }
+  }
+
+  getSearchHistory() {
+    try {
+      const history = localStorage.getItem('searchHistory');
+      return history ? JSON.parse(history) : [];
+    } catch (e) {
+      console.error('Error parsing search history:', e);
+      return [];
+    }
+  }
+
+  saveSearchHistory(searchTerm) {
+    if (!searchTerm || !searchTerm.trim()) return;
+    
+    const term = searchTerm.trim().toLowerCase();
+    let history = this.getSearchHistory();
+    
+    // Remove if already exists (to move to top)
+    history = history.filter(item => item.toLowerCase() !== term);
+    
+    // Add to beginning
+    history.unshift(term);
+    
+    // Keep only 10 most recent
+    history = history.slice(0, 10);
+    
+    try {
+      localStorage.setItem('searchHistory', JSON.stringify(history));
+    } catch (e) {
+      console.error('Error saving search history:', e);
+    }
+  }
+
+  updateSearchHistoryDatalist() {
+    const datalist = this.container.querySelector('#search-history');
+    if (!datalist) return;
+    
+    const history = this.getSearchHistory();
+    
+    // Clear existing options
+    datalist.innerHTML = '';
+    
+    // Add history items as options
+    history.forEach(term => {
+      const option = document.createElement('option');
+      option.value = term;
+      datalist.appendChild(option);
+    });
+  }
+
+  async performSearch(searchMode) {
+    const searchInput = this.container.querySelector('#search-input');
+    const searchTerm = searchInput.value.trim();
+    
+    if (!searchTerm) {
+      // Focus on search input and add animated highlight
+      searchInput.focus();
+      searchInput.classList.add('search-input-error');
+      
+      // Remove highlight after animation
+      setTimeout(() => {
+        searchInput.classList.remove('search-input-error');
+      }, 2000);
+      
+      return;
+    }
+
+    if (!this.selectedLanguagePair) {
+      alert('Please select a language pair first');
+      return;
+    }
+
+    try {
+      // Get the current difficulty and time filters
+      const difficultyFilters = this.getDifficultyFilters();
+      const timeFilter = this.getTimeFilter();
+
+      // Get filtered words based on current difficulty and time filters
+      const filteredWords = await dataSyncService.getFilteredCards(this.selectedLanguagePair, difficultyFilters, timeFilter);
+      
+      if (!filteredWords || filteredWords.length === 0) {
+        alert('No words available with current filters. Please adjust your difficulty or time filters.');
+        return;
+      }
+
+      let searchResults;
+      
+      if (searchMode === 'exact') {
+        // Exact word match with word boundaries (case insensitive)
+        const searchTermLower = searchTerm.toLowerCase();
+        
+        // Create regex to match whole word boundaries
+        const wordRegex = new RegExp(`\\b${searchTermLower}\\b`, 'i');
+        
+        searchResults = filteredWords.filter(word => {
+          // Check if search term matches as a whole word in either word or translation
+          const wordMatch = wordRegex.test(word.word);
+          const translationMatch = wordRegex.test(word.translation);
+          return wordMatch || translationMatch;
+        });
+      } else if (searchMode === 'partial') {
+        // Partial match (case insensitive)
+        const searchTermLower = searchTerm.toLowerCase();
+        searchResults = filteredWords.filter(word => 
+          word.word.toLowerCase().includes(searchTermLower) || 
+          word.translation.toLowerCase().includes(searchTermLower)
+        );
+      } else {
+        // Fuzzy search using Fuse.js
+        const fuseOptions = {
+          keys: ['word', 'translation'],
+          threshold: 0.3, // Lower threshold = more strict matching
+          isCaseSensitive: false,
+          includeScore: true,
+          ignoreLocation: true,
+          tokenize: true,
+          minMatchCharLength: 2
+        };
+
+        const fuse = new Fuse(filteredWords, fuseOptions);
+        const fuseResults = fuse.search(searchTerm);
+        searchResults = fuseResults.map(result => result.item);
+      }
+
+      if (searchResults.length === 0) {
+        alert(`No words found matching "${searchTerm}"`);
+        // Don't cleanup - let the user close the panel manually
+        return;
+      }
+
+      // Save search term to history
+      this.saveSearchHistory(searchTerm);
+
+      // Clean up and hide search panel
+      this.cleanupSearchPanel();
+
+      // Start study session with search results
+      const searchModeText = searchMode === 'exact' ? 'exact word' : searchMode === 'partial' ? 'partial' : 'fuzzy';
+      console.log(`Found ${searchResults.length} words matching "${searchTerm}" (${searchModeText} match)`);
+      this.onStartStudy(this.selectedLanguagePair, this.container.querySelector('#reverse-direction').checked, searchResults);
+
+    } catch (error) {
+      console.error('Search error:', error);
+      alert('Search failed: ' + error.message);
+    }
+  }
+
+  showLoadingSpinner() {
+    const overlay = this.container.querySelector('#loading-overlay');
+    if (overlay) {
+      overlay.style.display = 'flex';
+    }
+  }
+
+  hideLoadingSpinner() {
+    const overlay = this.container.querySelector('#loading-overlay');
+    if (overlay) {
+      overlay.style.display = 'none';
     }
   }
 }

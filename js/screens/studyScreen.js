@@ -3,17 +3,20 @@ import speechService from '../utils/speechService.js';
 import AppInfoModal from '../utils/appInfoModal.js';
 
 class StudyScreen {
-  constructor(container, languagePairId, reverseDirection, onBack) {
+  constructor(container, languagePairId, reverseDirection, onBack, searchResults = null) {
     this.container = container;
     this.languagePairId = languagePairId;
     this.reverseDirection = reverseDirection;
     this.onBack = onBack;
+    this.searchResults = searchResults;
     this.cards = [];
     this.languagePair = null;
     this.currentCardIndex = 0;
     this.isFlipped = false;
     this.languagePairName = '';
     this.languagePairs = [];
+    this.cardCheckAttempts = new Map(); // Track check attempts per card
+    this.cardRecommendations = new Map(); // Track recommendation level per card
   }
 
   getTimeFilter() {
@@ -82,8 +85,14 @@ class StudyScreen {
       // Get time filter settings
       const timeFilter = this.getTimeFilter();
 
-      // Load cards from IndexedDB with automatic sync and time filter
-      this.cards = await dataSyncService.getFilteredCards(this.languagePairId, effectiveFilters, timeFilter);
+      // Use search results if available, otherwise load filtered cards
+      if (this.searchResults && this.searchResults.length > 0) {
+        this.cards = this.searchResults;
+        console.log(`Using search results: ${this.cards.length} words`);
+      } else {
+        // Load cards from IndexedDB with automatic sync and time filter
+        this.cards = await dataSyncService.getFilteredCards(this.languagePairId, effectiveFilters, timeFilter);
+      }
 
       this.currentCardIndex = 0;
       this.isFlipped = false;
@@ -180,7 +189,25 @@ class StudyScreen {
                     </svg>
                   </button>
                 </div>
+                ${currentCard.type ? `<div class="card-type">(${currentCard.type})</div>` : ''}
                 <div class="hint">Tap to flip</div>
+                
+                <!-- Translation Practice Section -->
+                <div class="translation-practice">
+                  <div class="translation-input-container">
+                    <input type="text" 
+                           id="translation-input" 
+                           class="translation-input" 
+                           placeholder="Type your translation..." 
+                           autocomplete="off"
+                           spellcheck="false">
+                    <button id="check-translation-btn" class="check-translation-btn" title="Check translation">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="card-face card-back">
@@ -251,12 +278,26 @@ class StudyScreen {
     const prevBtn = this.container.querySelector('#prev-btn');
     const nextBtn = this.container.querySelector('#next-btn');
     const appTitle = this.container.querySelector('.app-title');
+    const translationInput = this.container.querySelector('#translation-input');
+    const checkTranslationBtn = this.container.querySelector('#check-translation-btn');
+
+    // Set initial speaker button classes based on ResponsiveVoice availability
+    speakerBtns.forEach(btn => {
+      if (speechService.useResponsiveVoice && speechService.responsiveVoiceLoaded) {
+        btn.classList.add('responsive-voice');
+      } else {
+        btn.classList.add('local-voice');
+      }
+    });
 
     if (flashcard) {
       flashcard.addEventListener('click', (e) => {
         const yesBtn = document.querySelector('#prompt-yes');
         if (!yesBtn) {
-          if (!e.target.closest('.speaker-btn') && !e.target.closest('.difficulty-btn') && !e.target.closest('.nav-btn')) {
+          if (!e.target.closest('.speaker-btn') && 
+              !e.target.closest('.difficulty-btn') && 
+              !e.target.closest('.nav-btn') &&
+              !e.target.closest('.translation-practice')) {
             this.toggleCard();
           }
         }
@@ -264,11 +305,62 @@ class StudyScreen {
     }
 
     speakerBtns.forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+      let pressTimer;
+      let isLongPress = false;
+      
+      const handleSpeech = async (e) => {
         e.stopPropagation();
         const text = btn.dataset.text;
         const lang = btn.dataset.lang;
-        await speechService.speak(text, lang);
+        
+        // Remove existing service classes
+        btn.classList.remove('local-voice', 'responsive-voice');
+        
+        // Speak and get the service used
+        const serviceUsed = await speechService.speak(text, lang);
+        
+        // Add the appropriate class to indicate which service was used
+        if (serviceUsed === 'responsive') {
+          btn.classList.add('responsive-voice');
+        } else {
+          btn.classList.add('local-voice');
+        }
+      };
+      
+      const startPress = (e) => {
+        e.preventDefault();
+        isLongPress = false;
+        
+        pressTimer = setTimeout(() => {
+          isLongPress = true;
+          speechService.promptForApiKey('en', true); // Show configuration dialog
+        }, 500); // 500ms for long press
+      };
+      
+      const endPress = (e) => {
+        clearTimeout(pressTimer);
+        
+        if (!isLongPress) {
+          // Regular click - speak the text
+          handleSpeech(e);
+        }
+      };
+      
+      // Mouse events
+      btn.addEventListener('mousedown', startPress);
+      btn.addEventListener('mouseup', endPress);
+      btn.addEventListener('mouseleave', endPress);
+      
+      // Touch events
+      btn.addEventListener('touchstart', startPress, { passive: false });
+      btn.addEventListener('touchend', endPress);
+      btn.addEventListener('touchcancel', endPress);
+      
+      // Prevent context menu on long press
+      btn.addEventListener('contextmenu', (e) => {
+        if (isLongPress) {
+          e.preventDefault();
+        }
       });
     });
 
@@ -304,12 +396,227 @@ class StudyScreen {
         AppInfoModal.show();
       });
     }
+
+    // Translation practice event listeners
+    if (translationInput && checkTranslationBtn) {
+      // Check translation on button click
+      checkTranslationBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.checkTranslation();
+      });
+
+      // Check translation on Enter key
+      translationInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.stopPropagation();
+          this.checkTranslation();
+        }
+      });
+
+      // Reset check button and update disabled state when user starts typing
+      translationInput.addEventListener('input', () => {
+        this.resetCheckButton();
+        this.updateCheckButtonState();
+      });
+      
+      // Initialize check button state
+      this.updateCheckButtonState();
+    }
   }
 
   toggleCard() {
     const flashcard = this.container.querySelector('#flashcard');
     if (flashcard) {
       flashcard.classList.toggle('flipped');
+      // Clear translation input when flipping the card
+      this.clearTranslationInput();
+    }
+  }
+
+  checkTranslation() {
+    const translationInput = this.container.querySelector('#translation-input');
+    const checkBtn = this.container.querySelector('#check-translation-btn');
+    
+    if (!translationInput || !checkBtn) return;
+
+    const userInput = translationInput.value.trim();
+    if (!userInput) {
+      this.resetCheckButton();
+      return;
+    }
+
+    const currentCard = this.cards[this.currentCardIndex];
+    const correctTranslation = this.reverseDirection ? currentCard.word : currentCard.translation;
+    
+    // Create a Fuse instance for fuzzy matching
+    const options = {
+      includeScore: true,
+      threshold: 0.25, // Lower threshold = more strict matching
+      ignoreLocation: true,
+      keys: ['translation']
+    };
+
+    // Create array with the correct translation for Fuse.js to search
+    const translations = [{ translation: correctTranslation }];
+    const fuse = new Fuse(translations, options);
+    
+    // Search for user input
+    const result = fuse.search(userInput);
+    
+    if (result.length > 0) {
+      const score = result[0].score;
+      const similarity = Math.round((1 - score) * 100);
+      
+      if (similarity === 100) {
+        // Perfect match - green 100%
+        this.showCheckButtonFeedback('100%', 'perfect');
+      } else if (similarity > 0) {
+        // Partial match - amber percentage
+        this.showCheckButtonFeedback(`${similarity}%`, 'partial');
+      } else {
+        // No match - red X
+        this.showCheckButtonFeedback('', 'nomatch');
+      }
+      
+      // Show difficulty recommendation
+      const recommendation = this.getDifficultyRecommendation(similarity);
+      console.log(`Calling showDifficultyRecommendation with: ${recommendation}`);
+      this.showDifficultyRecommendation(recommendation);
+    } else {
+      // No match found - red X
+      this.showCheckButtonFeedback('', 'nomatch');
+      
+      // Show difficulty recommendation for no match
+      const recommendation = this.getDifficultyRecommendation(0);
+      console.log(`Calling showDifficultyRecommendation with: ${recommendation} (no match)`);
+      this.showDifficultyRecommendation(recommendation);
+    }
+  }
+
+  showCheckButtonFeedback(text, feedbackType) {
+    const checkBtn = this.container.querySelector('#check-translation-btn');
+    if (!checkBtn) return;
+
+    // Remove all feedback classes
+    checkBtn.classList.remove('perfect', 'partial', 'nomatch');
+    
+    // Add the appropriate feedback class
+    checkBtn.classList.add(feedbackType);
+    
+    if (feedbackType === 'nomatch') {
+      // Show X icon for no match
+      checkBtn.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      `;
+    } else {
+      // Show percentage text
+      checkBtn.innerHTML = `<span style="font-size: 0.7rem; font-weight: bold;">${text}</span>`;
+    }
+  }
+
+  resetCheckButton() {
+    const checkBtn = this.container.querySelector('#check-translation-btn');
+    if (!checkBtn) return;
+
+    // Remove all feedback classes
+    checkBtn.classList.remove('perfect', 'partial', 'nomatch');
+    
+    // Reset to original checkmark icon
+    checkBtn.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    `;
+  }
+
+  clearTranslationInput() {
+    const translationInput = this.container.querySelector('#translation-input');
+    
+    if (translationInput) {
+      translationInput.value = '';
+    }
+    
+    // Reset check button to original state
+    this.resetCheckButton();
+    this.updateCheckButtonState();
+  }
+
+  updateCheckButtonState() {
+    const translationInput = this.container.querySelector('#translation-input');
+    const checkBtn = this.container.querySelector('#check-translation-btn');
+    
+    if (!translationInput || !checkBtn) return;
+    
+    const hasText = translationInput.value.trim().length > 0;
+    checkBtn.disabled = !hasText;
+  }
+
+  getDifficultyRecommendation(similarity) {
+    const currentCard = this.cards[this.currentCardIndex];
+    const cardId = `${currentCard.word}-${currentCard.translation}`;
+    
+    // Get current attempt count for this card
+    let attempts = this.cardCheckAttempts.get(cardId) || 0;
+    attempts++;
+    this.cardCheckAttempts.set(cardId, attempts);
+    
+    // Get or set the current recommendation level for this card
+    let currentRecommendation = this.cardRecommendations.get(cardId);
+    
+    // If we already have a recommendation and this is a 100% match, keep the same level
+    if (currentRecommendation && currentRecommendation!=='3' && similarity === 100) {
+      return currentRecommendation;
+    }
+    
+    // Determine new recommendation based on attempt number and similarity
+    let newRecommendation;
+    if (attempts === 1) {
+      // First attempt
+      if (similarity === 100) newRecommendation = '1'; // Easy
+      else if (similarity >= 90) newRecommendation = '2'; // Medium
+      else newRecommendation = '3'; // Hard
+    } else if (attempts === 2) {
+      // Second attempt
+      if (similarity === 100) newRecommendation = '2'; // Medium
+      else newRecommendation = '3'; // Hard
+    } else {
+      // Third or more attempts
+      newRecommendation = '3'; // Hard
+    }
+    
+    // Store the recommendation for this card
+    this.cardRecommendations.set(cardId, newRecommendation);
+    
+    console.log(`New recommendation: ${newRecommendation}`);
+    return newRecommendation;
+  }
+
+  showDifficultyRecommendation(recommendation) {
+    console.log(`Showing difficulty recommendation: ${recommendation}`);
+    const difficultyBtns = this.container.querySelectorAll('.difficulty-btn');
+    
+    console.log(`Found ${difficultyBtns.length} difficulty buttons:`, 
+      Array.from(difficultyBtns).map(btn => `${btn.textContent.trim()} (${btn.dataset.difficulty})`));
+    
+    // Remove any existing recommendations
+    difficultyBtns.forEach(btn => btn.classList.remove('recommendation'));
+    
+    // Add recommendation to the appropriate button
+    const targetBtn = Array.from(difficultyBtns).find(btn => 
+      btn.dataset.difficulty === recommendation
+    );
+    
+    console.log(`Target button found:`, targetBtn ? targetBtn.textContent.trim() : 'None');
+    
+    if (targetBtn) {
+      targetBtn.classList.add('recommendation');
+      console.log(`Added recommendation class to: ${targetBtn.textContent.trim()}`);
+      // Recommendation will stay until user moves to another card
+    } else {
+      console.error(`No button found for difficulty recommendation: ${recommendation}`);
     }
   }
 
@@ -326,7 +633,7 @@ class StudyScreen {
           btn.classList.add('active');
         }
       });
-      await dataSyncService.updateCardProgress(this.languagePairId, currentCard.word, difficulty);
+      await dataSyncService.updateCardProgress(this.languagePairId, currentCard.word, currentCard.type, difficulty);
     } catch (error) {
       console.error('Error updating card progress:', error);
     }
@@ -394,6 +701,7 @@ class StudyScreen {
         <div class="prompt-buttons">
           <button class="btn btn-primary" id="prompt-yes">Yes</button>
           <button class="btn btn-secondary-white-bg" id="prompt-no">No</button>
+          <button class="btn btn-success" id="prompt-done">Done</button>
         </div>
       </div>
     `;
@@ -401,6 +709,7 @@ class StudyScreen {
     // Add event listeners for prompt buttons
     const yesBtn = cardContent.querySelector('#prompt-yes');
     const noBtn = cardContent.querySelector('#prompt-no');
+    const doneBtn = cardContent.querySelector('#prompt-done');
     
     yesBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -414,6 +723,11 @@ class StudyScreen {
       flashcard.classList.remove('flipped');
       this.render();
       this.disableNavigationButtons(false);
+    });
+    
+    doneBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.onBack();
     });
   }
 
@@ -440,6 +754,13 @@ class StudyScreen {
     });
     // Update the card content
     this.currentCardIndex = nextCard;
+    
+    // Clear translation input before switching cards
+    this.clearTranslationInput();
+    
+    // Clear any existing difficulty recommendations
+    const difficultyBtns = this.container.querySelectorAll('.difficulty-btn');
+    difficultyBtns.forEach(btn => btn.classList.remove('recommendation'));
     
     // Re-render the card
     this.isFlipped = false;

@@ -1,5 +1,5 @@
 const DB_NAME = 'FlashcardDB';
-const DB_VERSION = 2;
+const DB_VERSION = 4;
 const CARD_STORE = 'cards';
 
 class CardDatabase {
@@ -28,10 +28,11 @@ class CardDatabase {
         
         // Create object store with correct structure
         const objectStore = db.createObjectStore(CARD_STORE, { 
-          keyPath: ['languagePair', 'word'] 
+          keyPath: ['languagePair', 'word', 'type'] 
         });
         
         objectStore.createIndex('languagePair', 'languagePair', { unique: false });
+        objectStore.createIndex('rank', 'rank', { unique: false });
         objectStore.createIndex('stats.difficulty', 'stats.difficulty', { unique: false });
         objectStore.createIndex('stats.lastReviewed', 'stats.lastReviewed', { unique: false });
       };
@@ -52,6 +53,7 @@ class CardDatabase {
         type: cardData.type,
         translation: cardData.translation,
         example: cardData.example || '',
+        rank: cardData.rank ? parseInt(cardData.rank) : null,
         range_count: cardData.range_count || null,
         frequency: cardData.frequency || null,
         stats: {
@@ -67,13 +69,13 @@ class CardDatabase {
     });
   }
 
-  async getCard(languagePair, word) {
+  async getCard(languagePair, word, type) {
     if (!this.db) await this.init();
     
     return new Promise((resolve, reject) => {
       const transaction = this.db.transaction([CARD_STORE], 'readonly');
       const store = transaction.objectStore(CARD_STORE);
-      const request = store.get([languagePair, word.toLowerCase()]);
+      const request = store.get([languagePair, word.toLowerCase(), type]);
       
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -94,12 +96,12 @@ class CardDatabase {
     });
   }
 
-  async updateCardProgress(languagePair, word, difficulty, lastReviewed) {
+  async updateCardProgress(languagePair, word, type, difficulty, lastReviewed) {
     if (!this.db) await this.init();
     
-    const card = await this.getCard(languagePair, word.toLowerCase());
+    const card = await this.getCard(languagePair, word.toLowerCase(), type);
     if (!card) {
-      throw new Error(`Card not found: ${languagePair} - ${word}`);
+      throw new Error(`Card not found: ${languagePair} - ${word} (${type})`);
     }
     
     card.stats = card.stats || {};
@@ -113,7 +115,7 @@ class CardDatabase {
   async mergeCardData(languagePair, jsonCard) {
     if (!this.db) await this.init();
     
-    const existingCard = await this.getCard(languagePair, jsonCard.word);
+    const existingCard = await this.getCard(languagePair, jsonCard.word, jsonCard.type);
     
     if (existingCard) {
       // Merge: update JSON fields, preserve user stats
@@ -145,13 +147,13 @@ class CardDatabase {
     return Promise.all(promises);
   }
 
-  async deleteCard(languagePair, word) {
+  async deleteCard(languagePair, word, type) {
     if (!this.db) await this.init();
     
     return new Promise((resolve, reject) => {
       const transaction = this.db.transaction([CARD_STORE], 'readwrite');
       const store = transaction.objectStore(CARD_STORE);
-      const request = store.delete([languagePair, word.toLowerCase()]);
+      const request = store.delete([languagePair, word.toLowerCase(), type]);
       
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);

@@ -5,7 +5,7 @@
   "targetLang": "English",
   "cards": [
     {
-      "id": "1",
+      "rank": 1,
       "word": "Hallo",
       "type": "interj",
       "translation": "Hello",
@@ -14,7 +14,7 @@
       "frequency": null
     },
     {
-      "id": "2",
+      "rank": 2,
       "word": "Danke",
       "type": "interj",
       "translation": "Thank you",
@@ -23,7 +23,7 @@
       "frequency": null
     },
     {
-      "id": "3",
+      "rank": 3,
       "word": "Bitte",
       "type": "adv",
       "translation": "Please / You're welcome",
@@ -32,7 +32,7 @@
       "frequency": null
     },
     {
-      "id": "4",
+      "rank": 4,
       "word": "Guten Morgen",
       "type": "phrase",
       "translation": "Good morning",
@@ -41,7 +41,7 @@
       "frequency": null
     },
     {
-      "id": "5",
+      "rank": 5,
       "word": "Auf Wiedersehen",
       "type": "phrase",
       "translation": "Goodbye",

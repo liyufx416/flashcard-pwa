@@ -144,13 +144,13 @@ class ManageCardsScreen {
                 <td class="front-cell">${card.originalWord || card.word}</td>
                 <td class="back-cell">${card.translation}</td>
                 <td class="actions-col">
-                  <button type="button" class="icon-btn edit-btn" data-word="${card.word}" aria-label="Edit card" title="Edit">
+                  <button type="button" class="icon-btn edit-btn" data-word="${card.word}" data-type="${card.type}" aria-label="Edit card" title="Edit">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M12 20h9" />
                       <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
                     </svg>
                   </button>
-                  <button type="button" class="icon-btn delete-btn" data-word="${card.word}" aria-label="Delete card" title="Delete">
+                  <button type="button" class="icon-btn delete-btn" data-word="${card.word}" data-type="${card.type}" aria-label="Delete card" title="Delete">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <polyline points="3 6 5 6 21 6" />
                       <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
@@ -169,11 +169,17 @@ class ManageCardsScreen {
 
     // Add event listeners for edit and delete buttons
     this.container.querySelectorAll('.edit-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => this.handleEditCard(e.target.closest('button').dataset.word));
+      btn.addEventListener('click', (e) => {
+        const button = e.target.closest('button');
+        this.handleEditCard(button.dataset.word, button.dataset.type);
+      });
     });
 
     this.container.querySelectorAll('.delete-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => this.handleDeleteCard(e.target.closest('button').dataset.word));
+      btn.addEventListener('click', (e) => {
+        const button = e.target.closest('button');
+        this.handleDeleteCard(button.dataset.word, button.dataset.type);
+      });
     });
   }
 
@@ -302,17 +308,17 @@ class ManageCardsScreen {
     }
   }
 
-  handleEditCard(word) {
-    const card = this.cards.find(c => c.word === word);
+  handleEditCard(word, type) {
+    const card = this.cards.find(c => c.word === word && c.type === type);
     if (card) {
       this.showEditCardModal(card);
     }
   }
 
-  async handleDeleteCard(word) {
+  async handleDeleteCard(word, type) {
     if (confirm('Are you sure you want to delete this card?')) {
       try {
-        await dataSyncService.deleteCard(this.selectedLanguagePair, word);
+        await dataSyncService.deleteCard(this.selectedLanguagePair, word, type);
         await this.loadCards(this.selectedLanguagePair);
       } catch (error) {
         console.error('Error deleting card:', error);
