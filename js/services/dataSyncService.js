@@ -6,6 +6,7 @@ const CHECKSUM_PREFIX = 'fileChecksum-';
 class DataSyncService {
   constructor() {
     this.syncInProgress = new Map();
+    this.checksumCache = new Map(); // Cache checksums to avoid redundant calculations
   }
 
   async getStoredChecksum(languagePairId) {
@@ -14,14 +15,29 @@ class DataSyncService {
 
   async setStoredChecksum(languagePairId, checksum) {
     localStorage.setItem(`${CHECKSUM_PREFIX}${languagePairId}`, checksum);
+    // Clear cache when checksum is updated
+    this.checksumCache.delete(languagePairId);
   }
 
-  async fetchAndCalculateChecksum(languagePairId) {
+  async fetchAndCalculateChecksum(languagePairId, force = false) {
+    // Check cache first (unless force is true)
+    if (!force && this.checksumCache.has(languagePairId)) {
+      return this.checksumCache.get(languagePairId);
+    }
+
     try {
-      const response = await fetch(`/data/${languagePairId}.json`);
+      // Add cache: "reload" parameter when force is true to bypass browser cache
+      const response = await fetch(`/data/${languagePairId}.json`, {
+        cache: force ? "reload" : "default"
+      });
       const text = await response.text();
       const checksum = await calculateMD5(text);
-      return { text, checksum, data: JSON.parse(text) };
+      const result = { text, checksum, data: JSON.parse(text) };
+      
+      // Cache the result
+      this.checksumCache.set(languagePairId, result);
+      
+      return result;
     } catch (error) {
       console.error(`Error fetching data for ${languagePairId}:`, error);
       throw error;
@@ -58,7 +74,7 @@ class DataSyncService {
   async _performSync(languagePairId, forceSync) {
     try {
       const storedChecksum = await this.getStoredChecksum(languagePairId);
-      const { text, checksum, data } = await this.fetchAndCalculateChecksum(languagePairId);
+      const { text, checksum, data } = await this.fetchAndCalculateChecksum(languagePairId, forceSync);
 
       if (!forceSync && storedChecksum === checksum) {
         console.log(`No changes detected for ${languagePairId}`);
@@ -89,38 +105,23 @@ class DataSyncService {
     }
   }
 
-  async loadCardsFromDB(languagePairId) {
-    try {
-      await cardDB.init();
-      
-      const hasChanged = await this.hasFileChanged(languagePairId);
-      
-      if (hasChanged) {
-        await this.syncLanguagePair(languagePairId);
-      }
-      
-      return await cardDB.getAllCards(languagePairId);
-    } catch (error) {
-      console.error(`Error loading cards for ${languagePairId}:`, error);
-      throw error;
-    }
-  }
-
+  
   async ensureDataLoaded(languagePairId) {
     const cards = await cardDB.getAllCards(languagePairId);
     
     if (cards.length === 0) {
       await this.syncLanguagePair(languagePairId, true);
       return await cardDB.getAllCards(languagePairId);
+    } else {
+        return cards;
     }
+  }
+
+  async forceSyncLanguagePair(languagePairId) {
+    // Force sync to get latest data from server
+    const result = await this.syncLanguagePair(languagePairId, true);
     
-    const hasChanged = await this.hasFileChanged(languagePairId);
-    if (hasChanged) {
-      await this.syncLanguagePair(languagePairId);
-      return await cardDB.getAllCards(languagePairId);
-    }
-    
-    return cards;
+    return result;
   }
 
   async getDifficultyCounts(languagePairId, timeFilter = null) {
@@ -133,17 +134,22 @@ class DataSyncService {
     return await cardDB.getFilteredCards(languagePairId, difficultyFilters, timeFilter);
   }
 
-  async updateCardProgress(languagePairId, word, difficulty) {
+  async getAllWords(languagePairId) {
+    await this.ensureDataLoaded(languagePairId);
+    return await cardDB.getAllCards(languagePairId);
+  }
+
+  async updateCardProgress(languagePairId, word, type, difficulty) {
     const timestamp = Date.now();
-    return await cardDB.updateCardProgress(languagePairId, word, difficulty, timestamp);
+    return await cardDB.updateCardProgress(languagePairId, word, type, difficulty, timestamp);
   }
 
   async saveCard(languagePairId, cardData) {
     return await cardDB.saveCard(languagePairId, cardData);
   }
 
-  async deleteCard(languagePairId, word) {
-    return await cardDB.deleteCard(languagePairId, word);
+  async deleteCard(languagePairId, word, type) {
+    return await cardDB.deleteCard(languagePairId, word, type);
   }
 }
 
