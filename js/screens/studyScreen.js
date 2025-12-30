@@ -451,7 +451,7 @@ class StudyScreen {
     // Create a Fuse instance for fuzzy matching
     const options = {
       includeScore: true,
-      threshold: 0.4, // Lower threshold = more strict matching
+      threshold: 0.25, // Lower threshold = more strict matching
       ignoreLocation: true,
       keys: ['translation']
     };
