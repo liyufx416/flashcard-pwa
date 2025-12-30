@@ -1,0 +1,315 @@
+{ 
+	"decks": [
+		{
+			"name": "Animales",
+			"cards":
+			[
+				{
+					"word": "animal",
+					"type": "nm",
+					"translation": "animal"
+				},
+				{
+					"rank": 780,
+					"word": "caballo",
+					"type": "nm",
+					"translation": "horse"
+				},
+				{
+					"rank": 939,
+					"word": "perro",
+					"type": "nm",
+					"translation": "dog"
+				},
+				{
+					"rank": 1412,
+					"word": "gato",
+					"type": "nm",
+					"translation": "cat"
+				},
+				{
+					"rank": 1824,
+					"word": "pájaro",
+					"type": "nm",
+					"translation": "bird"
+				},
+				{
+					"rank": 2207,
+					"word": "ave",
+					"type": "nm",
+					"translation": "bird"
+				},
+				{
+					"rank": 2234,
+					"word": "vaca",
+					"type": "nf",
+					"translation": "cow"
+				},
+				{
+					"rank": 2331,
+					"word": "toro",
+					"type": "nm",
+					"translation": "bull"
+				},
+				{
+					"rank": 2425,
+					"word": "ganado",
+					"type": "nm",
+					"translation": "livestock"
+				},
+				{
+					"rank": 2426,
+					"word": "pez",
+					"type": "nm",
+					"translation": "fish"
+				},
+				{
+					"rank": 2756,
+					"word": "león",
+					"type": "nm",
+					"translation": "lion"
+				},
+				{
+					"rank": 2956,
+					"word": "mosca",
+					"type": "nf",
+					"translation": "fly"
+				},
+				{
+					"rank": 3023,
+					"word": "gallina",
+					"type": "nf",
+					"translation": "hen"
+				},
+				{
+					"rank": 3200,
+					"word": "cerdo",
+					"type": "nm",
+					"translation": "pig"
+				},
+				{
+					"rank": 3231,
+					"word": "pollo",
+					"type": "nm",
+					"translation": "chicken"
+				},
+				{
+					"rank": 3471,
+					"word": "mono",
+					"type": "nm",
+					"translation": "monkey"
+				},
+				{
+					"rank": 3497,
+					"word": "rata",
+					"type": "nf",
+					"translation": "rat"
+				},
+				{
+					"rank": 3542,
+					"word": "insecto",
+					"type": "nm",
+					"translation": "insect"
+				},
+				{
+					"rank": 3556,
+					"word": "oveja",
+					"type": "nf",
+					"translation": "sheep"
+				},
+				{
+					"rank": 3700,
+					"word": "paloma",
+					"type": "nf",
+					"translation": "dove"
+				},
+				{
+					"rank": 3856,
+					"word": "ratón",
+					"type": "nm",
+					"translation": "mouse"
+				},
+				{
+					"rank": 3872,
+					"word": "gallo",
+					"type": "nm",
+					"translation": "rooster"
+				},
+				{
+					"rank": 3883,
+					"word": "mariposa",
+					"type": "nf",
+					"translation": "butterfly"
+				},
+				{
+					"rank": 3898,
+					"word": "lobo",
+					"type": "nm",
+					"translation": "wolf"
+				},
+				{
+					"rank": 4150,
+					"word": "serpiente",
+					"type": "nf",
+					"translation": "snake"
+				},
+				{
+					"rank": 4316,
+					"word": "conejo",
+					"type": "nm",
+					"translation": "rabbit"
+				},
+				{
+					"rank": 4553,
+					"word": "hormiga",
+					"type": "nf",
+					"translation": "ant"
+				},
+				{
+					"rank": 4555,
+					"word": "oso",
+					"type": "nm",
+					"translation": "bear"
+				},
+				{
+					"rank": 4559,
+					"word": "gusano",
+					"type": "nm",
+					"translation": "worm"
+				},
+				{
+					"rank": 4582,
+					"word": "tigre",
+					"type": "nm",
+					"translation": "tiger"
+				},
+				{
+					"rank": 4610,
+					"word": "burro",
+					"type": "nm",
+					"translation": "donkey"
+				},
+				{
+					"rank": 4717,
+					"word": "araña",
+					"type": "nf",
+					"translation": "spider"
+				},
+				{
+					"rank": 4741,
+					"word": "abeja",
+					"type": "nf",
+					"translation": "bee"
+				},
+				{
+					"rank": 4772,
+					"word": "buey",
+					"type": "nm",
+					"translation": "ox"
+				},
+				{
+					"rank": 4786,
+					"word": "pato",
+					"type": "nm",
+					"translation": "duck"
+				},
+				{
+					"rank": 4912,
+					"word": "cabra",
+					"type": "nf",
+					"translation": "goat"
+				},
+				{
+					"rank": 4945,
+					"word": "elefante",
+					"type": "nm",
+					"translation": "elephant"
+				},
+				{
+					"rank": 5027,
+					"word": "águila",
+					"type": "nm",
+					"translation": "eagle"
+				},
+				{
+					"rank": 5206,
+					"word": "mosquito",
+					"type": "nm",
+					"translation": "mosquito"
+				},
+				{
+					"rank": 5386,
+					"word": "sapo",
+					"type": "nm",
+					"translation": "toad"
+				},
+				{
+					"rank": 5849,
+					"word": "pajarito",
+					"type": "nm",
+					"translation": "little bird"
+				},
+				{
+					"rank": 6137,
+					"word": "rana",
+					"type": "nf",
+					"translation": "frog"
+				},
+				{
+					"rank": 6179,
+					"word": "tortuga",
+					"type": "nf",
+					"translation": "turtle"
+				},
+				{
+					"rank": 6434,
+					"word": "zorro",
+					"type": "nm",
+					"translation": "fox"
+				},
+				{
+					"rank": 6576,
+					"word": "víbora",
+					"type": "nf",
+					"translation": "viper"
+				},
+				{
+					"rank": 6586,
+					"word": "murciélago",
+					"type": "nm",
+					"translation": "bat"
+				},
+				{
+					"rank": 6613,
+					"word": "grillo",
+					"type": "nm",
+					"translation": "cricket"
+				},
+				{
+					"rank": 6641,
+					"word": "cisne",
+					"type": "nm",
+					"translation": "swan"
+				},
+				{
+					"rank": 7360,
+					"word": "ballena",
+					"type": "nf",
+					"translation": "whale"
+				},
+				{
+					"rank": 7556,
+					"word": "cuervo",
+					"type": "nm",
+					"translation": "raven"
+				},
+				{
+					"rank": 7978,
+					"word": "gaviota",
+					"type": "nf",
+					"translation": "seagull"
+				}
+			]
+		}
+	]
+}

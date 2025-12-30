@@ -489,11 +489,29 @@ header {
   outline: none;
 }
 
+.deck-selector {
+  margin-top: 1rem;
+}
+
+.deck-selector select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  transition: var(--transition);  
+  background-color: transparent;
+}
+
+.deck-selector select:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  outline: none;
+}
+
 .button-container {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  margin-top: 1.5rem;
 }
 
 .difficulty-filters {
@@ -1528,11 +1546,6 @@ p {
   font-size: 1rem;
   margin: 0;
   color: white;
-}
-
-/* Hide manage cards button */
-#manage-cards {
-  display: none;
 }
 
 /* Search input error animation */

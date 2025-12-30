@@ -15,7 +15,11 @@ class AppInfoModal {
 
       // Get version: prioritize local storage, then fall back to manifest
       const localVersion = localStorage.getItem('appVersion');
-      const displayVersion = localVersion || manifest.version;
+      const baseVersion = localVersion || manifest.version;
+      
+      // Check if version has only major.minor (no micro version)
+      const versionParts = baseVersion.split('.');
+      const displayVersion = versionParts.length === 2 ? `${baseVersion}-dev` : baseVersion;
 
       // Create modal HTML
       const modalHtml = `
@@ -51,21 +55,37 @@ class AppInfoModal {
           checkUpdateBtn.classList.add('checking');
           
           try {
-            const reloadTriggered = await VersionManager.checkVersionAndReload();
+            // Check if this is a dev version
+            const isDevVersion = versionParts.length === 2;
             
-            // If we reach here, no reload was triggered, so show checkmark
-            if (!reloadTriggered) {
-              checkUpdateBtn.textContent = '✓'; // Green checkmark
-              checkUpdateBtn.classList.remove('checking');
-              checkUpdateBtn.classList.add('up-to-date');
+            if (isDevVersion) {
+              // Dev version: use force reload
+              console.log('Dev version detected, using force reload...');
               
+              // Add a brief delay to show the spinning animation
               setTimeout(() => {
-                checkUpdateBtn.textContent = '↻'; // Back to refresh icon
-                checkUpdateBtn.disabled = false;
-                checkUpdateBtn.classList.remove('up-to-date');
-              }, 2000);
+                // Use VersionManager with force reload
+                VersionManager.checkVersionAndReload(true);
+              }, 500);
+            } else {
+              // Production version: use original version check behavior
+              const reloadTriggered = await VersionManager.checkVersionAndReload();
+              
+              // If we reach here, no reload was triggered, so show checkmark
+              if (!reloadTriggered) {
+                checkUpdateBtn.textContent = '✓'; // Green checkmark
+                checkUpdateBtn.classList.remove('checking');
+                checkUpdateBtn.classList.add('up-to-date');
+                
+                setTimeout(() => {
+                  checkUpdateBtn.textContent = '↻'; // Back to refresh icon
+                  checkUpdateBtn.disabled = false;
+                  checkUpdateBtn.classList.remove('up-to-date');
+                }, 2000);
+              }
+              // If reload was triggered, the page will reload and this code won't continue
             }
-            // If reload was triggered, the page will reload and this code won't continue
+            
           } catch (error) {
             console.error('Error checking for updates:', error);
             checkUpdateBtn.textContent = '✗'; // Red X for error
