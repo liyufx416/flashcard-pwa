@@ -46,7 +46,8 @@ class WelcomeScreen {
         const timeFilter = { mode, period };
         
         // Load counts from IndexedDB with automatic sync and time filter
-        const counts = await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, timeFilter);
+        const selectedDeck = this.getSelectedDeck();
+        const counts = await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, timeFilter, selectedDeck);
         
         // Calculate total count based on difficulty filters
         const filteredCount =
@@ -102,8 +103,9 @@ class WelcomeScreen {
     if (!totalWordsEl || !masteredWordsEl) return;
 
     try {
-      // Get counts without any filters
-      const counts = await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null);
+      // Get counts with deck filter
+      const selectedDeck = this.getSelectedDeck();
+      const counts = await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null, selectedDeck);
       
       // Total words is sum of all difficulties
       const totalWords = counts.new + counts.hard + counts.medium + counts.easy;
@@ -135,9 +137,10 @@ class WelcomeScreen {
       }
 
       // Load counts from IndexedDB with automatic sync and time filter
+      const selectedDeck = this.getSelectedDeck();
       const counts = forceSync 
-        ? await dataSyncService.forceSyncLanguagePair(this.selectedLanguagePair).then(() => dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null))
-        : await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null);
+        ? await dataSyncService.forceSyncLanguagePair(this.selectedLanguagePair).then(() => dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null, selectedDeck))
+        : await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null, selectedDeck);
 
       buttons.forEach((btn) => {
         const key = btn.dataset.filter;
@@ -180,7 +183,7 @@ class WelcomeScreen {
       // Get counts with time filter applied
       const timeFilter = this.getTimeFilter();
       const timeFilteredCounts = timeFilter 
-        ? await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, timeFilter)
+        ? await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, timeFilter, selectedDeck)
         : counts;
 
       // Calculate filtered count based on both difficulty and time filters
@@ -214,8 +217,84 @@ class WelcomeScreen {
         (this.languagePairs.length > 0 ? this.languagePairs[0].id : null);
       
       this.render();
+      
+      // Load decks after rendering
+      this.loadDecks();
     } catch (error) {
       console.error('Error loading language pairs:', error);
+    }
+  }
+
+  getAvailableLanguagePairs() {
+    return this.languagePairs ? this.languagePairs.map(pair => pair.id) : [];
+  }
+
+  getSelectedLanguagePair() {
+    return this.selectedLanguagePair;
+  }
+
+  getSelectedDeck() {
+    const deckSelect = this.container.querySelector('#deck-select');
+    return deckSelect ? deckSelect.value : 'all';
+  }
+
+  async loadDecks() {
+    if (!this.selectedLanguagePair) return;
+
+    try {
+      // Ensure data is loaded first
+      await dataSyncService.ensureDataLoaded(this.selectedLanguagePair);
+      
+      // Get all decks for the current language pair
+      const decks = await dataSyncService.getAllDecks(this.selectedLanguagePair);
+      const deckSelector = this.container.querySelector('#deck-selector');
+      const deckSelect = this.container.querySelector('#deck-select');
+
+      if (decks.length > 0 && deckSelector && deckSelect) {
+        // Show deck selector
+        deckSelector.style.display = 'block';
+        
+        // Get total card count for "All Cards"
+        const totalCards = await dataSyncService.getDifficultyCounts(this.selectedLanguagePair);
+        const totalCardCount = totalCards.new + totalCards.hard + totalCards.medium + totalCards.easy;
+        
+        // Clear existing options and add "All Cards" with count
+        deckSelect.innerHTML = `<option value="all">Deck: All Cards (${totalCardCount} cards)</option>`;
+        
+        // Add deck options with card counts
+        decks.forEach(deck => {
+          const option = document.createElement('option');
+          option.value = deck.deckName;
+          const cardCount = deck.cards ? deck.cards.length : 0;
+          option.textContent = `Deck: ${deck.deckName} (${cardCount} cards)`;
+          deckSelect.appendChild(option);
+        });
+
+        // Restore saved deck selection
+        const savedDeck = localStorage.getItem('selectedDeck');
+        if (savedDeck && decks.some(deck => deck.deckName === savedDeck)) {
+          deckSelect.value = savedDeck;
+        }
+        
+        // Update all counts to reflect the selected deck
+        this.updateDifficultyCounts();
+        this.updateStats();
+        this.updateTimePeriodCounts();
+      } else if (deckSelector) {
+        // Hide deck selector if no decks
+        deckSelector.style.display = 'none';
+        
+        // Still update counts for "All Cards" (which is the default)
+        this.updateDifficultyCounts();
+        this.updateStats();
+        this.updateTimePeriodCounts();
+      }
+    } catch (error) {
+      console.error('Error loading decks:', error);
+      // Retry after a short delay
+      setTimeout(() => {
+        this.loadDecks();
+      }, 1000);
     }
   }
 
@@ -271,6 +350,11 @@ class WelcomeScreen {
                 </option>`
               ).join('')}
             </select>
+            <div class="deck-selector" id="deck-selector" style="display: none;">
+            <select id="deck-select" class="form-select">
+            <option value="all">Deck: All Cards</option>
+            </select>
+            </div>
           </div>
           <div class="stats-section">
             <div class="stats-content">
@@ -393,6 +477,7 @@ class WelcomeScreen {
 
   setupEventListeners() {
     const languageSelect = this.container.querySelector('#language-pair');
+    const deckSelect = this.container.querySelector('#deck-select');
     const startStudyBtn = this.container.querySelector('#start-study');
     const searchBtn = this.container.querySelector('#search-btn');
     const manageCardsBtn = this.container.querySelector('#manage-cards');
@@ -542,11 +627,26 @@ class WelcomeScreen {
       }
 
       this.updateDifficultyCounts(true); // Force sync when language changes
+      this.loadDecks(); // Load decks for new language pair
     });
+
+    // Deck selector event listener
+    if (deckSelect) {
+      deckSelect.addEventListener('change', (e) => {
+        // Save selection to localStorage
+        localStorage.setItem('selectedDeck', e.target.value);
+        
+        // Update all counts and UI for selected deck
+        this.updateDifficultyCounts();
+        this.updateStats();
+        this.updateTimePeriodCounts();
+      });
+    }
 
     startStudyBtn.addEventListener('click', () => {
       if (this.selectedLanguagePair) {
-        this.onStartStudy(this.selectedLanguagePair, reverseDirection.checked);
+        const selectedDeck = this.getSelectedDeck();
+        this.onStartStudy(this.selectedLanguagePair, reverseDirection.checked, null, selectedDeck);
       }
     });
 
@@ -819,12 +919,13 @@ class WelcomeScreen {
     }
 
     try {
-      // Get the current difficulty and time filters
+      // Get the current difficulty, time, and deck filters
       const difficultyFilters = this.getDifficultyFilters();
       const timeFilter = this.getTimeFilter();
+      const selectedDeck = this.getSelectedDeck();
 
-      // Get filtered words based on current difficulty and time filters
-      const filteredWords = await dataSyncService.getFilteredCards(this.selectedLanguagePair, difficultyFilters, timeFilter);
+      // Get filtered words based on current difficulty, time, and deck filters
+      const filteredWords = await dataSyncService.getFilteredCards(this.selectedLanguagePair, difficultyFilters, timeFilter, selectedDeck);
       
       if (!filteredWords || filteredWords.length === 0) {
         alert('No words available with current filters. Please adjust your difficulty or time filters.');
