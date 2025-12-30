@@ -1,5 +1,5 @@
 class VersionManager {
-  static async checkVersionAndReload() {
+  static async checkVersionAndReload(forceReload = false) {
     try {
       // Fetch current version from manifest.json
       const response = await fetch('/manifest.json', {  cache: 'reload' });
@@ -9,12 +9,15 @@ class VersionManager {
       // Get locally saved version
       const savedVersion = localStorage.getItem('appVersion');
       
-      // Check if version is different
-      const needsReload = !savedVersion || 
+      // Check if version is different or force reload is requested
+      const needsReload = forceReload || 
+                        !savedVersion || 
                         savedVersion !== currentVersion;
       
       if (needsReload) {
-        console.log(`Version change detected: ${savedVersion} -> ${currentVersion}. Force reloading page...`);
+        const reason = forceReload ? 'Force reload requested' : 
+                      (!savedVersion ? 'No saved version' : `Version change: ${savedVersion} -> ${currentVersion}`);
+        console.log(`${reason}. Force reloading page...`);
         
         // Save current version
         localStorage.setItem('appVersion', currentVersion);

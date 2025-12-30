@@ -3,12 +3,13 @@ import speechService from '../utils/speechService.js';
 import AppInfoModal from '../utils/appInfoModal.js';
 
 class StudyScreen {
-  constructor(container, languagePairId, reverseDirection, onBack, searchResults = null) {
+  constructor(container, languagePairId, reverseDirection, onBack, searchResults = null, deckFilter = null) {
     this.container = container;
     this.languagePairId = languagePairId;
     this.reverseDirection = reverseDirection;
     this.onBack = onBack;
     this.searchResults = searchResults;
+    this.deckFilter = deckFilter;
     this.cards = [];
     this.languagePair = null;
     this.currentCardIndex = 0;
@@ -91,7 +92,7 @@ class StudyScreen {
         console.log(`Using search results: ${this.cards.length} words`);
       } else {
         // Load cards from IndexedDB with automatic sync and time filter
-        this.cards = await dataSyncService.getFilteredCards(this.languagePairId, effectiveFilters, timeFilter);
+        this.cards = await dataSyncService.getFilteredCards(this.languagePairId, effectiveFilters, timeFilter, this.deckFilter);
       }
 
       this.currentCardIndex = 0;
