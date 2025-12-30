@@ -120,7 +120,7 @@ class WelcomeScreen {
     }
   }
 
-  async updateDifficultyCounts() {
+  async updateDifficultyCounts(forceSync = false) {
     if (!this.selectedLanguagePair) return;
 
     const buttons = this.container.querySelectorAll('.difficulty-filter-btn');
@@ -129,8 +129,15 @@ class WelcomeScreen {
     const startStudyBtn = this.container.querySelector('#start-study');
 
     try {
+      // Show spinner when force syncing
+      if (forceSync) {
+        this.showLoadingSpinner();
+      }
+
       // Load counts from IndexedDB with automatic sync and time filter
-      const counts = await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null);
+      const counts = forceSync 
+        ? await dataSyncService.forceSyncLanguagePair(this.selectedLanguagePair).then(() => dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null))
+        : await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null);
 
       buttons.forEach((btn) => {
         const key = btn.dataset.filter;
@@ -187,6 +194,11 @@ class WelcomeScreen {
       }
     } catch (error) {
       console.error('Error loading card counts:', error);
+    } finally {
+      // Always hide spinner when done
+      if (forceSync) {
+        this.hideLoadingSpinner();
+      }
     }
   }
 
@@ -317,6 +329,13 @@ class WelcomeScreen {
                 <button id="fuzzy-search-btn" class="btn btn-secondary">Fuzzy Match</button>
               </div>
             </div>
+          </div>
+        
+        <!-- Loading Spinner Overlay -->
+        <div class="loading-overlay" id="loading-overlay" style="display: none;">
+          <div class="spinner-container">
+            <div class="spinner"></div>
+            <p class="loading-text">Loading language data...</p>
           </div>
         </div>
       </div>
@@ -521,7 +540,7 @@ class WelcomeScreen {
         localStorage.setItem('selectedLanguagePair', this.selectedLanguagePair);
       }
 
-      this.updateDifficultyCounts();
+      this.updateDifficultyCounts(true); // Force sync when language changes
     });
 
     startStudyBtn.addEventListener('click', () => {
@@ -843,6 +862,20 @@ class WelcomeScreen {
     } catch (error) {
       console.error('Search error:', error);
       alert('Search failed: ' + error.message);
+    }
+  }
+
+  showLoadingSpinner() {
+    const overlay = this.container.querySelector('#loading-overlay');
+    if (overlay) {
+      overlay.style.display = 'flex';
+    }
+  }
+
+  hideLoadingSpinner() {
+    const overlay = this.container.querySelector('#loading-overlay');
+    if (overlay) {
+      overlay.style.display = 'none';
     }
   }
 }
