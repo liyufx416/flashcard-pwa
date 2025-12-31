@@ -227,9 +227,14 @@ class WelcomeScreen {
 
   async loadLanguagePairs() {
     try {
-      const response = await fetch('/data/metadata.json');
-      const data = await response.json();
-      this.languagePairs = data.languagePairs;
+      // Initialize language pair metadata from metadata.json if needed
+      await dataSyncService.initializeLanguagePairMetadata();
+
+      // Get all language pairs with metadata
+      this.languagePairs = await dataSyncService.getAllLanguagePairMetadata();
+      
+      // Sort alphabetically by name
+      this.languagePairs.sort((a, b) => a.name.localeCompare(b.name));
       
       // Get saved language pair or use the first one
       const savedLanguagePair = localStorage.getItem('selectedLanguagePair');
@@ -245,6 +250,7 @@ class WelcomeScreen {
     }
   }
 
+  
   getAvailableLanguagePairs() {
     return this.languagePairs ? this.languagePairs.map(pair => pair.id) : [];
   }
@@ -400,7 +406,10 @@ class WelcomeScreen {
                   ${pair.name}
                 </option>`
               ).join('')}
+              <option value="import-data">Import data...</option>
             </select>
+            <!-- Hidden file input for import -->
+            <input type="file" id="import-file-input" accept=".json" style="display: none;">
             <div class="deck-selector" id="deck-selector" style="display: none;">
             <select id="deck-select" class="form-select">
             <option value="all">Deck: All Cards</option>
@@ -669,8 +678,25 @@ class WelcomeScreen {
 
     this.updateDifficultyCounts();
 
+    // Add click handler to detect clicks on import option only when it's already selected
+    languageSelect.addEventListener('click', (e) => {
+      const selectedValue = e.target.value;
+      // Only trigger on click if import is already selected (no language pairs case)
+      if (selectedValue === 'import-data' && this.languagePairs.length === 0) {
+        this.triggerImport();
+      }
+    });
+
     languageSelect.addEventListener('change', (e) => {
-      this.selectedLanguagePair = e.target.value;
+      const selectedValue = e.target.value;
+      
+      // Handle import option
+      if (selectedValue === 'import-data') {
+        this.triggerImport();
+        return;
+      }
+      
+      this.selectedLanguagePair = selectedValue;
       startStudyBtn.disabled = !this.selectedLanguagePair;
       // Save selection to localStorage
       if (this.selectedLanguagePair) {
@@ -712,6 +738,12 @@ class WelcomeScreen {
         this.onStartStudy(this.selectedLanguagePair, reverseDirection.checked, null, selectedDeck);
       }
     });
+
+    // Import file input event listener
+    const importFileInput = this.container.querySelector('#import-file-input');
+    if (importFileInput) {
+      importFileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+    }
 
     // Search functionality
     if (searchBtn) {
@@ -1077,6 +1109,157 @@ class WelcomeScreen {
     if (overlay) {
       overlay.style.display = 'none';
     }
+  }
+
+  triggerImport() {
+    const fileInput = this.container.querySelector('#import-file-input');
+    if (fileInput) {
+      fileInput.click();
+    }
+    
+    // Reset selector to a valid state after file selection
+    setTimeout(() => {
+      const languageSelect = this.container.querySelector('#language-pair');
+      if (this.languagePairs.length > 0) {
+        languageSelect.value = this.selectedLanguagePair || this.languagePairs[0].id;
+      } else {
+        languageSelect.value = 'import-data';
+      }
+    }, 100);
+  }
+
+  async handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) {
+      return;
+    }
+
+    if (!file.name.endsWith('.json')) {
+      alert('Please select a valid JSON file.');
+      return;
+    }
+
+    try {
+      // Show loading spinner
+      this.showLoadingSpinner();
+
+      // Read and parse the file
+      const fileContent = await this.readFileContent(file);
+      const importData = JSON.parse(fileContent);
+
+      // Validate import data structure
+      if (!dataSyncService.validateImportData(importData)) {
+        throw new Error('Invalid import data format.');
+      }
+
+      // Show confirmation dialog
+      const confirmed = this.confirmImport(importData);
+      if (!confirmed) {
+        return;
+      }
+
+      // Process the import (no language pair restriction for welcome screen)
+      const result = await dataSyncService.processImportData(importData, null);
+
+      // Show results
+      this.showImportResults(result);
+
+      // Switch to imported language pair after user clicks OK
+      setTimeout(async () => {
+        // Refresh language pairs to include newly imported one with its metadata
+        await this.loadLanguagePairs();
+        await this.switchToLanguagePair(importData.languagePair);
+      }, 100);
+
+    } catch (error) {
+      console.error('Error importing data:', error);
+      alert(`Failed to import data: ${error.message}`);
+    } finally {
+      // Hide loading spinner
+      this.hideLoadingSpinner();
+      
+      // Reset file input
+      const fileInput = this.container.querySelector('#import-file-input');
+      fileInput.value = '';
+    }
+  }
+
+  readFileContent(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = (e) => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
+  }
+
+  confirmImport(importData) {
+    const message = `Import data for "${importData.languagePair}"?
+
+This will:
+${this.languagePairs.some(pair => pair.id === importData.languagePair) ? 
+  '• Merge with existing data for this language pair' : 
+  '• Create a new language pair and import data'}
+
+Cards: ${importData.data.cards.length}
+Decks: ${importData.data.decks.length}
+
+Do you want to continue?`;
+
+    return confirm(message);
+  }
+
+  showImportResults(result) {
+    const message = `Import Complete!
+
+Cards:
+  New: ${result.cards.new}
+  Merged: ${result.cards.merged}
+  Skipped: ${result.cards.skipped}
+
+Decks:
+  New: ${result.decks.new}
+  Merged: ${result.decks.merged}
+  Skipped: ${result.decks.skipped}`;
+
+    // Clear saved deck selection to force refresh and show "All Cards"
+    const savedDeckKey = `selectedDeck_${result.languagePair || this.selectedLanguagePair}`;
+    localStorage.removeItem(savedDeckKey);
+    
+    // Use consistent alert pattern like other screens
+    alert(message);
+  }
+
+  async switchToLanguagePair(languagePairId) {
+    // Check if language pair exists in current list
+    const existingPair = this.languagePairs.find(pair => pair.id === languagePairId);
+    
+    if (!existingPair) {
+      // Add new language pair to the list
+      const languagePairStr = String(languagePairId);
+      const [source, target] = languagePairStr.split('-');
+      const newPair = {
+        id: languagePairStr,
+        name: `${source.charAt(0).toUpperCase() + source.slice(1)} - ${target.charAt(0).toUpperCase() + target.slice(1)}`,
+        sourceLang: source.charAt(0).toUpperCase() + source.slice(1),
+        targetLang: target.charAt(0).toUpperCase() + target.slice(1)
+      };
+      
+      // Save the new language pair metadata to IndexedDB
+      await dataSyncService.saveLanguagePairMetadata(newPair);
+      
+      this.languagePairs.push(newPair);
+      
+      // Sort language pairs alphabetically by name
+      this.languagePairs.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    
+    // Update selected language pair
+    this.selectedLanguagePair = languagePairId;
+    localStorage.setItem('selectedLanguagePair', languagePairId);
+    
+    // Re-render the screen to update everything including the dropdown
+    this.render();
   }
 }
 

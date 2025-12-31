@@ -1,7 +1,8 @@
 const DB_NAME = 'FlashcardDB';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 const CARD_STORE = 'cards';
 const DECK_STORE = 'decks';
+const LANGUAGE_PAIR_STORE = 'languagePairs';
 
 class CardDatabase {
   constructor() {
@@ -49,6 +50,18 @@ class CardDatabase {
           deckStore.createIndex('deckName', 'deckName', { unique: false });
           
           console.log('Created decks object store for version 5');
+        }
+        
+        // Handle version 5 to 6 migration (add language pairs store)
+        if (oldVersion < 6) {
+          // Create language pairs object store
+          const languagePairStore = db.createObjectStore(LANGUAGE_PAIR_STORE, { 
+            keyPath: 'id' 
+          });
+          
+          languagePairStore.createIndex('name', 'name', { unique: false });
+          
+          console.log('Created language pairs object store for version 6');
         }
       };
     });
@@ -490,6 +503,61 @@ class CardDatabase {
       const store = transaction.objectStore(DECK_STORE);
       const index = store.index('languagePair');
       const request = index.getAll(languagePair);
+      
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getAllLanguagePairs() {
+    // Get language pairs from metadata store instead of card data
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([LANGUAGE_PAIR_STORE], 'readonly');
+      const store = transaction.objectStore(LANGUAGE_PAIR_STORE);
+      const request = store.getAllKeys();
+      
+      request.onsuccess = () => {
+        // Get unique language pair IDs from metadata
+        const languagePairs = request.result || [];
+        resolve(languagePairs);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getLanguagePairMetadata(languagePairId) {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([LANGUAGE_PAIR_STORE], 'readonly');
+      const store = transaction.objectStore(LANGUAGE_PAIR_STORE);
+      const request = store.get(languagePairId);
+      
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async saveLanguagePairMetadata(languagePairMetadata) {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([LANGUAGE_PAIR_STORE], 'readwrite');
+      const store = transaction.objectStore(LANGUAGE_PAIR_STORE);
+      const request = store.put(languagePairMetadata);
+      
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getAllLanguagePairMetadata() {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([LANGUAGE_PAIR_STORE], 'readonly');
+      const store = transaction.objectStore(LANGUAGE_PAIR_STORE);
+      const request = store.getAll();
       
       request.onsuccess = () => resolve(request.result || []);
       request.onerror = () => reject(request.error);

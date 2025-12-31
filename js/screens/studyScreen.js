@@ -63,11 +63,16 @@ class StudyScreen {
 
   async loadCards() {
     try {
-      // Load language pairs first if not already loaded
+      // Load language pairs using existing methods
       if (this.languagePairs.length === 0) {
-        const pairsResponse = await fetch('/data/metadata.json');
-        const pairsData = await pairsResponse.json();
-        this.languagePairs = pairsData.languagePairs || [];
+        // Initialize language pair metadata from metadata.json if needed
+        await dataSyncService.initializeLanguagePairMetadata();
+
+        // Get all language pairs with metadata
+        this.languagePairs = await dataSyncService.getAllLanguagePairMetadata();
+        
+        // Sort alphabetically by name
+        this.languagePairs.sort((a, b) => a.name.localeCompare(b.name));
       }
       
       // Get the current language pair name
@@ -76,17 +81,28 @@ class StudyScreen {
       
       // Load language pair metadata for display
       try {
-        // Try to get from JSON file first (for metadata like name, description)
-        const response = await fetch(`/data/${this.languagePairId}.json`);
-        const data = await response.json();
-        this.languagePair = data;
+        // Get metadata from IndexedDB
+        const metadata = await dataSyncService.getLanguagePairMetadata(this.languagePairId);
+        if (metadata) {
+          this.languagePair = metadata;
+        } else {
+          // Create minimal metadata if not found
+          console.warn(`Language pair metadata not found for ${this.languagePairId}, using fallback`);
+          this.languagePair = {
+            id: this.languagePairId,
+            name: this.languagePairId.split('-').map(lang => lang.charAt(0).toUpperCase() + lang.slice(1)).join(' - '),
+            sourceLang: this.languagePairId.split('-')[0].charAt(0).toUpperCase() + this.languagePairId.split('-')[0].slice(1),
+            targetLang: this.languagePairId.split('-')[1].charAt(0).toUpperCase() + this.languagePairId.split('-')[1].slice(1)
+          };
+        }
       } catch (error) {
-        // If JSON file doesn't exist, create minimal metadata
-        console.warn(`Language pair metadata file not found for ${this.languagePairId}, using fallback`);
+        console.error('Error loading language pair metadata:', error);
+        // Create minimal metadata on error
         this.languagePair = {
-          languagePair: this.languagePairId,
+          id: this.languagePairId,
           name: this.languagePairId.split('-').map(lang => lang.charAt(0).toUpperCase() + lang.slice(1)).join(' - '),
-          description: `Flashcards for ${this.languagePairId}`
+          sourceLang: this.languagePairId.split('-')[0].charAt(0).toUpperCase() + this.languagePairId.split('-')[0].slice(1),
+          targetLang: this.languagePairId.split('-')[1].charAt(0).toUpperCase() + this.languagePairId.split('-')[1].slice(1)
         };
       }
 
