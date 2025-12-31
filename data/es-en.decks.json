@@ -1,5 +1,24 @@
 { 
 	"decks": [
+        {
+            "name": "Rank 1-500",
+            "startRank": 1,
+            "endRank": 500
+        },
+        {
+            "name": "Rank 501-1500",
+            "startRank": 501,
+            "endRank": 1500
+        },
+        {
+            "name": "Rank 1501-3000",
+            "startRank": 1501,
+            "endRank": 3000
+        },
+        {
+            "name": "Rank 3001+",
+            "startRank": 3001
+        },
 		{
 			"name": "Animales",
 			"cards":

@@ -217,12 +217,34 @@ class CardDatabase {
     if (deckFilter && deckFilter !== 'all') {
       const deck = await this.getDeck(languagePair, deckFilter);
       if (deck) {
-        const deckCardKeys = new Set(
-          deck.cards.map(card => `${card.word}-${card.type}`)
-        );
-        cards = cards.filter(card => 
-          deckCardKeys.has(`${card.word}-${card.type}`)
-        );
+        // Check if this is a rank-based deck or card-based deck
+        if (deck.startRank !== undefined) {
+          // Rank-based deck - filter by rank range
+          const startRank = deck.startRank;
+          const endRank = deck.endRank || Infinity;
+          
+          // Check if any cards have ranks
+          const cardsWithRanks = cards.filter(card => card.rank !== undefined && card.rank !== null);
+          
+          if (cardsWithRanks.length === 0) {
+            // No cards have ranks, rank-based deck filtering won't work
+            // Return empty counts for rank-based decks when cards have no ranks
+            return { new: 0, easy: 0, medium: 0, hard: 0 };
+          }
+          
+          cards = cards.filter(card => {
+            const rank = card.rank;
+            return rank && rank >= startRank && rank <= endRank;
+          });
+        } else {
+          // Card-based deck - filter by explicit card list
+          const deckCardKeys = new Set(
+            deck.cards.map(card => `${card.word}-${card.type}`)
+          );
+          cards = cards.filter(card => 
+            deckCardKeys.has(`${card.word}-${card.type}`)
+          );
+        }
       } else {
         // Deck not found, return empty counts
         return { new: 0, easy: 0, medium: 0, hard: 0 };
@@ -303,12 +325,25 @@ class CardDatabase {
     if (deckFilter && deckFilter !== 'all') {
       const deck = await this.getDeck(languagePair, deckFilter);
       if (deck) {
-        const deckCardKeys = new Set(
-          deck.cards.map(card => `${card.word}-${card.type}`)
-        );
-        cards = cards.filter(card => 
-          deckCardKeys.has(`${card.word}-${card.type}`)
-        );
+        // Check if this is a rank-based deck or card-based deck
+        if (deck.startRank !== undefined) {
+          // Rank-based deck - filter by rank range
+          const startRank = deck.startRank;
+          const endRank = deck.endRank || Infinity;
+          
+          cards = cards.filter(card => {
+            const rank = card.rank;
+            return rank && rank >= startRank && rank <= endRank;
+          });
+        } else {
+          // Card-based deck - filter by explicit card list
+          const deckCardKeys = new Set(
+            deck.cards.map(card => `${card.word}-${card.type}`)
+          );
+          cards = cards.filter(card => 
+            deckCardKeys.has(`${card.word}-${card.type}`)
+          );
+        }
       } else {
         // Deck not found, return empty array
         return [];
@@ -358,40 +393,67 @@ class CardDatabase {
         
         if (existingDeck && !overwrite) {
           // Merge mode: combine existing and new cards, avoid duplicates
-          const existingCardKeys = new Set(
-            existingDeck.cards.map(card => `${card.word}-${card.type}`)
-          );
-          
-          const newCards = deckData.cards.filter(card => 
-            !existingCardKeys.has(`${card.word}-${card.type}`)
-          ).map(card => ({
-            word: card.word,
-            type: card.type
-          }));
-          
-          finalDeck = {
-            languagePair,
-            deckName,
-            cards: [...existingDeck.cards, ...newCards],
-            createdAt: existingDeck.createdAt,
-            updatedAt: Date.now()
-          };
-          
-          console.log(`Merged deck "${deckName}": added ${newCards.length} new cards`);
-        } else {
-          // Overwrite mode or new deck
-          finalDeck = {
-            languagePair,
-            deckName,
-            cards: deckData.cards.map(card => ({
+          if (deckData.startRank !== undefined) {
+            // Rank-based deck - just update timestamps, keep rank info
+            finalDeck = {
+              languagePair,
+              deckName,
+              startRank: deckData.startRank,
+              endRank: deckData.endRank,
+              createdAt: existingDeck.createdAt,
+              updatedAt: Date.now()
+            };
+            console.log(`Merged rank-based deck "${deckName}"`);
+          } else {
+            // Card-based deck - merge cards
+            const existingCardKeys = new Set(
+              existingDeck.cards.map(card => `${card.word}-${card.type}`)
+            );
+            
+            const newCards = deckData.cards.filter(card => 
+              !existingCardKeys.has(`${card.word}-${card.type}`)
+            ).map(card => ({
               word: card.word,
               type: card.type
-            })),
-            createdAt: existingDeck?.createdAt || Date.now(),
-            updatedAt: Date.now()
-          };
-          
-          console.log(`${existingDeck ? 'Overwrote' : 'Created'} deck "${deckName}" with ${finalDeck.cards.length} cards`);
+            }));
+            
+            finalDeck = {
+              languagePair,
+              deckName,
+              cards: [...existingDeck.cards, ...newCards],
+              createdAt: existingDeck.createdAt,
+              updatedAt: Date.now()
+            };
+            
+            console.log(`Merged deck "${deckName}": added ${newCards.length} new cards`);
+          }
+        } else {
+          // Overwrite mode or new deck
+          if (deckData.startRank !== undefined) {
+            // Rank-based deck
+            finalDeck = {
+              languagePair,
+              deckName,
+              startRank: deckData.startRank,
+              endRank: deckData.endRank,
+              createdAt: existingDeck?.createdAt || Date.now(),
+              updatedAt: Date.now()
+            };
+            console.log(`${existingDeck ? 'Overwrote' : 'Created'} rank-based deck "${deckName}"`);
+          } else {
+            // Card-based deck
+            finalDeck = {
+              languagePair,
+              deckName,
+              cards: deckData.cards.map(card => ({
+                word: card.word,
+                type: card.type
+              })),
+              createdAt: existingDeck?.createdAt || Date.now(),
+              updatedAt: Date.now()
+            };
+            console.log(`${existingDeck ? 'Overwrote' : 'Created'} deck "${deckName}" with ${finalDeck.cards.length} cards`);
+          }
         }
         
         const transaction = this.db.transaction([DECK_STORE], 'readwrite');

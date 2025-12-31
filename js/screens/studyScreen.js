@@ -75,9 +75,20 @@ class StudyScreen {
       this.languagePairName = currentPair ? currentPair.name : this.languagePairId;
       
       // Load language pair metadata for display
-      const response = await fetch(`/data/${this.languagePairId}.json`);
-      const data = await response.json();
-      this.languagePair = data;
+      try {
+        // Try to get from JSON file first (for metadata like name, description)
+        const response = await fetch(`/data/${this.languagePairId}.json`);
+        const data = await response.json();
+        this.languagePair = data;
+      } catch (error) {
+        // If JSON file doesn't exist, create minimal metadata
+        console.warn(`Language pair metadata file not found for ${this.languagePairId}, using fallback`);
+        this.languagePair = {
+          languagePair: this.languagePairId,
+          name: this.languagePairId.split('-').map(lang => lang.charAt(0).toUpperCase() + lang.slice(1)).join(' - '),
+          description: `Flashcards for ${this.languagePairId}`
+        };
+      }
 
       const defaultDifficultyFilters = {
         new: true,

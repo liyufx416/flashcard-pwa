@@ -30,9 +30,39 @@ class DataSyncService {
       const response = await fetch(`/data/${languagePairId}.json`, {
         cache: force ? "reload" : "default"
       });
-      const text = await response.text();
+
+      let text;
+
+      // Check for 404 response
+      if (response.status === 404) {
+        console.warn(`Data file not found for ${languagePairId}, using empty array`);
+        text = '';
+      } else {     
+        text = await response.text();
+      }
+      
+      // Check for empty text before parsing
+      if (text.trim() === '') {
+        console.warn(`Empty data file for ${languagePairId}, using empty array`);
+        const emptyData = [];
+        const checksum = await calculateMD5(text);
+        const result = { text, checksum, data: emptyData };
+        this.checksumCache.set(languagePairId, result);
+        return result;
+      }
+      
       const checksum = await calculateMD5(text);
-      const result = { text, checksum, data: JSON.parse(text) };
+      
+      // Parse JSON (now that we know it's not empty)
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        // Invalid JSON - rethrow the error
+        throw new Error(`Invalid JSON in ${languagePairId}.json: ${parseError.message}`);
+      }
+      
+      const result = { text, checksum, data };
       
       // Cache the result
       this.checksumCache.set(languagePairId, result);
@@ -87,6 +117,17 @@ class DataSyncService {
       console.log(`Syncing data for ${languagePairId}...`);
       const cards = data.cards || [];
       
+      // If there's no data to sync (empty file or 404), don't overwrite existing data
+      if (cards.length === 0) {
+        console.log(`No data available to sync for ${languagePairId}, preserving existing IndexedDB data`);
+        // Store the checksum to prevent repeated sync attempts
+        await this.setStoredChecksum(languagePairId, checksum);
+        return {
+          changed: false,
+          cardsCount: (await cardDB.getAllCards(languagePairId)).length
+        };
+      }
+      
       // Save cards to database
       for (const card of cards) {
         await cardDB.mergeCardData(languagePairId, card);
@@ -115,8 +156,21 @@ class DataSyncService {
     const cards = await cardDB.getAllCards(languagePairId);
     
     if (cards.length === 0) {
-      await this.syncLanguagePair(languagePairId, true);
-      return await cardDB.getAllCards(languagePairId);
+      // Check if there's actually data available to sync before syncing
+      try {
+        const { data } = await this.fetchAndCalculateChecksum(languagePairId, false);
+        if (data && data.cards && data.cards.length > 0) {
+          // Only sync if there's actual data to sync
+          await this.syncLanguagePair(languagePairId, true);
+          return await cardDB.getAllCards(languagePairId);
+        } else {
+          // No data available to sync, return empty array
+          return cards; // Return empty cards
+        }
+      } catch (error) {
+        // If we can't fetch data, just return what we have (which is empty)
+        return cards;
+      }
     } else {
         return cards;
     }
@@ -153,6 +207,10 @@ class DataSyncService {
     return await cardDB.saveCard(languagePairId, cardData);
   }
 
+  async saveDeck(languagePairId, deckData) {
+    return await cardDB.saveDeck(languagePairId, deckData.deckName, deckData);
+  }
+
   async deleteCard(languagePairId, word, type) {
     return await cardDB.deleteCard(languagePairId, word, type);
   }
@@ -181,29 +239,38 @@ class DataSyncService {
         // Save deck structure to database
         await cardDB.saveDeck(languagePairId, deck.name, deck);
         
-        // Merge deck cards into main cards collection
-        for (const deckCard of deck.cards || []) {
-          // Check if card already exists
-          const existingCard = await cardDB.getCard(languagePairId, deckCard.word, deckCard.type);
+        // Check if this is a rank-based deck or card-based deck
+        if (deck.startRank !== undefined) {
+          // Rank-based deck - no explicit cards, just rank range
+          console.log(`Processing rank-based deck: ${deck.name} (rank ${deck.startRank}-${deck.endRank || '∞'})`);
           
-          if (!existingCard) {
-            // Card doesn't exist, add it from deck
-            await cardDB.saveCard(languagePairId, {
-              ...deckCard,
-              rank: deckCard.rank || null,
-              example: deckCard.example || '',
-              range_count: deckCard.range_count || null,
-              frequency: deckCard.frequency || null,
-              stats: {
-                difficulty: null,
-                lastReviewed: null,
-                reviewCount: 0
-              }
-            });
-            console.log(`Added new card from deck: ${deckCard.word} (${deckCard.type})`);
-          } else {
-            // Card exists, keep original data (deck data doesn't override)
-            console.log(`Card already exists, keeping original: ${deckCard.word} (${deckCard.type})`);
+          // Cards will be filtered by rank when deck is selected for study
+          // No need to add individual cards to database
+        } else {
+          // Card-based deck - process explicit cards
+          for (const deckCard of deck.cards || []) {
+            // Check if card already exists
+            const existingCard = await cardDB.getCard(languagePairId, deckCard.word, deckCard.type);
+            
+            if (!existingCard) {
+              // Card doesn't exist, add it from deck
+              await cardDB.saveCard(languagePairId, {
+                ...deckCard,
+                rank: deckCard.rank || null,
+                example: deckCard.example || '',
+                range_count: deckCard.range_count || null,
+                frequency: deckCard.frequency || null,
+                stats: {
+                  difficulty: null,
+                  lastReviewed: null,
+                  reviewCount: 0
+                }
+              });
+              console.log(`Added new card from deck: ${deckCard.word} (${deckCard.type})`);
+            } else {
+              // Card exists, keep original data (deck data doesn't override)
+              console.log(`Card already exists, keeping original: ${deckCard.word} (${deckCard.type})`);
+            }
           }
         }
       }
