@@ -282,18 +282,47 @@ class WelcomeScreen {
         deckSelect.innerHTML = `<option value="all">Deck: All Cards (${totalCardCount} cards)</option>`;
         
         // Add deck options with card counts
-        decks.forEach(deck => {
+        for (const deck of decks) {
           const option = document.createElement('option');
           option.value = deck.deckName;
-          const cardCount = deck.cards ? deck.cards.length : 0;
+          
+          let cardCount;
+          if (deck.startRank !== undefined) {
+            // Rank-based deck - get count by filtering cards by rank range
+            const deckCounts = await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null, deck.deckName);
+            cardCount = deckCounts.new + deckCounts.hard + deckCounts.medium + deckCounts.easy;
+          } else {
+            // Card-based deck - use explicit card list
+            cardCount = deck.cards ? deck.cards.length : 0;
+          }
+          
           option.textContent = `Deck: ${deck.deckName} (${cardCount} cards)`;
           deckSelect.appendChild(option);
-        });
+        }
 
-        // Restore saved deck selection
-        const savedDeck = localStorage.getItem('selectedDeck');
+        // Restore saved deck selection for current language pair
+        const savedDeckKey = `selectedDeck_${this.selectedLanguagePair}`;
+        let savedDeck = localStorage.getItem(savedDeckKey);
+        
+        // Migrate old global deck selection if this is the first load for this language pair
+        if (!savedDeck) {
+          const oldGlobalDeck = localStorage.getItem('selectedDeck');
+          if (oldGlobalDeck && oldGlobalDeck !== 'all') {
+            // Check if the old deck exists for this language pair
+            if (decks.some(deck => deck.deckName === oldGlobalDeck)) {
+              savedDeck = oldGlobalDeck;
+              localStorage.setItem(savedDeckKey, savedDeck);
+            }
+          }
+          // Clean up old global deck selection
+          localStorage.removeItem('selectedDeck');
+        }
+        
         if (savedDeck && decks.some(deck => deck.deckName === savedDeck)) {
           deckSelect.value = savedDeck;
+        } else {
+          // Default to "All Cards" if no saved deck for this language pair
+          deckSelect.value = 'all';
         }
         
         // Update all counts to reflect the selected deck
@@ -312,9 +341,11 @@ class WelcomeScreen {
     } catch (error) {
       console.error('Error loading decks:', error);
       // Retry after a short delay
+      /*
       setTimeout(() => {
         this.loadDecks();
       }, 1000);
+      */
     }
   }
 
@@ -646,15 +677,27 @@ class WelcomeScreen {
         localStorage.setItem('selectedLanguagePair', this.selectedLanguagePair);
       }
 
+      // Reset deck selector to "All Cards" temporarily to avoid incorrect filtering
+      const deckSelect = this.container.querySelector('#deck-select');
+      if (deckSelect) {
+        deckSelect.value = 'all';
+      }
+      
+      // Update counts with "All Cards" first, then load decks
       this.updateDifficultyCounts(true); // Force sync when language changes
-      this.loadDecks(); // Load decks for new language pair
+      this.updateStats();
+      this.updateTimePeriodCounts();
+      
+      // Load decks for new language pair (will restore appropriate deck selection)
+      this.loadDecks();
     });
 
     // Deck selector event listener
     if (deckSelect) {
       deckSelect.addEventListener('change', (e) => {
-        // Save selection to localStorage
-        localStorage.setItem('selectedDeck', e.target.value);
+        // Save selection to localStorage with language pair specific key
+        const deckKey = `selectedDeck_${this.selectedLanguagePair}`;
+        localStorage.setItem(deckKey, e.target.value);
         
         // Update all counts and UI for selected deck
         this.updateDifficultyCounts();
