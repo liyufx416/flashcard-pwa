@@ -24,7 +24,7 @@ class AppInfoModal {
       // Create modal HTML
       const modalHtml = `
         <div class="modal-overlay" id="app-info-modal">
-          <div class="modal-content">
+          <div class="app-info-modal">
             <div class="modal-body">
               <div class="app-info-header">
                 <table> <tr><td><span class="app-info-icon"/></td>

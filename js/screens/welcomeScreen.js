@@ -1,6 +1,7 @@
 import dataSyncService from '../services/dataSyncService.js';
 import speechService from '../utils/speechService.js';
 import AppInfoModal from '../utils/appInfoModal.js';
+import TextUtils from '../utils/textUtils.js';
 
 class WelcomeScreen {
   constructor(container, onStartStudy, onManageCards) {
@@ -1038,29 +1039,39 @@ class WelcomeScreen {
       let searchResults;
       
       if (searchMode === 'exact') {
-        // Exact word match with word boundaries (case insensitive)
+        // Exact word match with word boundaries (accent-insensitive)
         const searchTermLower = searchTerm.toLowerCase();
         
-        // Create regex to match whole word boundaries
-        const wordRegex = new RegExp(`\\b${searchTermLower}\\b`, 'i');
+        // Create accent-insensitive regex to match whole word boundaries
+        const wordRegex = TextUtils.createAccentInsensitiveRegex(searchTerm);
         
         searchResults = filteredWords.filter(word => {
-          // Check if search term matches as a whole word in either word or translation
-          const wordMatch = wordRegex.test(word.word);
-          const translationMatch = wordRegex.test(word.translation);
+          // Check if search term matches as a whole word in either word or translation (accent-insensitive)
+          const wordMatch = wordRegex.test(TextUtils.removeAccents(word.word));
+          const translationMatch = wordRegex.test(TextUtils.removeAccents(word.translation));
           return wordMatch || translationMatch;
         });
       } else if (searchMode === 'partial') {
-        // Partial match (case insensitive)
-        const searchTermLower = searchTerm.toLowerCase();
+        // Partial match (accent-insensitive)
+        const searchTermNoAccents = TextUtils.createAccentInsensitiveTerm(searchTerm);
+        
         searchResults = filteredWords.filter(word => 
-          word.word.toLowerCase().includes(searchTermLower) || 
-          word.translation.toLowerCase().includes(searchTermLower)
+          TextUtils.accentInsensitiveMatch(word.word, searchTerm) || 
+          TextUtils.accentInsensitiveMatch(word.translation, searchTerm)
         );
       } else {
-        // Fuzzy search using Fuse.js
+        // Fuzzy search using Fuse.js with accent-insensitive matching
+        const searchTermNoAccents = TextUtils.createAccentInsensitiveTerm(searchTerm);
+        
+        // Create accent-free versions of all words for fuzzy matching
+        const wordsNoAccents = filteredWords.map(word => ({
+          ...word,
+          wordNoAccents: TextUtils.removeAccents(word.word),
+          translationNoAccents: TextUtils.removeAccents(word.translation)
+        }));
+        
         const fuseOptions = {
-          keys: ['word', 'translation'],
+          keys: ['wordNoAccents', 'translationNoAccents'],
           threshold: 0.3, // Lower threshold = more strict matching
           isCaseSensitive: false,
           includeScore: true,
@@ -1069,8 +1080,8 @@ class WelcomeScreen {
           minMatchCharLength: 2
         };
 
-        const fuse = new Fuse(filteredWords, fuseOptions);
-        const fuseResults = fuse.search(searchTerm);
+        const fuse = new Fuse(wordsNoAccents, fuseOptions);
+        const fuseResults = fuse.search(searchTermNoAccents);
         searchResults = fuseResults.map(result => result.item);
       }
 
