@@ -355,47 +355,14 @@ class ManageCardsScreen {
       exportBtn.textContent = 'Exporting...';
       exportBtn.disabled = true;
 
-      // Collect all data for the language pair
-      const exportData = {
-        languagePair: this.selectedLanguagePair,
-        exportDate: new Date().toISOString(),
-        version: '1.0',
-        data: {
-          cards: [],
-          decks: []
-        }
-      };
-
-      // Get all cards (progress data is already included in card.stats object as stored in IndexedDB)
-      const allCards = await dataSyncService.getAllWords(this.selectedLanguagePair);
-      
-      // Remove empty stats objects to reduce export size
-      const cleanedCards = allCards.map(card => {
-        if (card.stats && 
-            card.stats.difficulty === null && 
-            card.stats.lastReviewed === null && 
-            card.stats.reviewCount === 0) {
-          // Remove stats object if it's empty/default
-          const { stats, ...cardWithoutStats } = card;
-          return cardWithoutStats;
-        }
-        return card;
-      });
-      
-      exportData.data.cards = cleanedCards;
-
-      // Get all decks
-      const allDecks = await dataSyncService.getAllDecks(this.selectedLanguagePair);
-      exportData.data.decks = allDecks;
-
-      // Convert to JSON string
-      const jsonString = JSON.stringify(exportData, null, 2);
+      // Export language pair data using centralized service
+      const exportResult = await dataSyncService.exportLanguagePairData(this.selectedLanguagePair);
       
       // Create and download file
-      await this.downloadFile(exportData);
+      await this.downloadFile(exportResult.exportData);
 
       // Show success message
-      alert(`Export successful! Exported ${allCards.length} cards and ${allDecks.length} decks.`);
+      alert(`Export successful! Exported ${exportResult.stats.cardsCount} cards and ${exportResult.stats.decksCount} decks.`);
 
     } catch (error) {
       console.error('Error exporting data:', error);
@@ -593,12 +560,18 @@ class ManageCardsScreen {
       const importData = JSON.parse(fileContent);
 
       // Validate import data structure
-      if (!this.validateImportData(importData)) {
+      if (!dataSyncService.validateImportData(importData)) {
         throw new Error('Invalid import data format.');
       }
 
-      // Process the import
-      const result = await this.processImportData(importData);
+      // Check if language pair matches
+      if (importData.languagePair !== this.selectedLanguagePair) {
+        alert(`The file's language pair ${importData.languagePair} does not match current language pair ${this.selectedLanguagePair}, skipping..`);
+        return;
+      }
+
+      // Process the import with language pair restriction
+      const result = await dataSyncService.processImportData(importData, this.selectedLanguagePair);
 
       // Show results
       this.showImportResults(result);
@@ -619,6 +592,7 @@ class ManageCardsScreen {
     }
   }
 
+  
   readFileContent(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -628,232 +602,7 @@ class ManageCardsScreen {
     });
   }
 
-  validateImportData(data) {
-    return (
-      data &&
-      typeof data === 'object' &&
-      data.languagePair &&
-      data.data &&
-      Array.isArray(data.data.cards) &&
-      Array.isArray(data.data.decks)
-    );
-  }
-
-  async processImportData(importData) {
-    const result = {
-      cards: {
-        new: 0,
-        merged: 0,
-        skipped: 0
-      },
-      decks: {
-        new: 0,
-        merged: 0,
-        skipped: 0
-      }
-    };
-
-    // Skip if language pair doesn't match
-    if (importData.languagePair !== this.selectedLanguagePair) {
-      result.cards.skipped = importData.data.cards.length;
-      result.decks.skipped = importData.data.decks.length;
-      return result;
-    }
-
-    // Get existing data
-    const existingCards = await dataSyncService.getAllWords(this.selectedLanguagePair);
-    const existingDecks = await dataSyncService.getAllDecks(this.selectedLanguagePair);
-
-    // Create maps for easy lookup
-    const existingCardMap = new Map();
-    existingCards.forEach(card => {
-      const key = `${card.word.toLowerCase()}-${card.type}`;
-      existingCardMap.set(key, card);
-    });
-
-    const existingDeckMap = new Map();
-    existingDecks.forEach(deck => {
-      existingDeckMap.set(deck.deckName, deck);
-    });
-
-    // Process cards
-    for (const importCard of importData.data.cards) {
-      const key = `${importCard.word.toLowerCase()}-${importCard.type}`;
-      const existingCard = existingCardMap.get(key);
-
-      if (!existingCard) {
-        // New card
-        await this.saveImportCard(importCard);
-        result.cards.new++;
-      } else {
-        // Merge card
-        await this.mergeCardData(existingCard, importCard);
-        result.cards.merged++;
-      }
-    }
-
-    // Process decks
-    for (const importDeck of importData.data.decks) {
-      const existingDeck = existingDeckMap.get(importDeck.deckName);
-
-      if (!existingDeck) {
-        // New deck
-        await this.saveImportDeck(importDeck);
-        result.decks.new++;
-      } else {
-        // Merge deck
-        await this.mergeDeckData(existingDeck, importDeck);
-        result.decks.merged++;
-      }
-    }
-
-    return result;
-  }
-
-  async saveImportCard(cardData) {
-    // Ensure the card has the correct structure
-    const normalizedCard = {
-      word: cardData.word,
-      type: cardData.type,
-      translation: cardData.translation,
-      example: cardData.example || '',
-      range_count: cardData.range_count || null,
-      frequency: cardData.frequency || null,
-      rank: cardData.rank !== undefined ? cardData.rank : null,
-      stats: cardData.stats || {
-        difficulty: null,
-        lastReviewed: null,
-        reviewCount: 0
-      }
-    };
-
-    await dataSyncService.saveCard(this.selectedLanguagePair, normalizedCard);
-  }
-
-  async mergeCardData(existingCard, importCard) {
-    // Merge stats data
-    const mergedStats = {
-      difficulty: null,
-      lastReviewed: null,
-      reviewCount: 0
-    };
-
-    // Determine which stats to use based on lastReviewed
-    const existingLastReviewed = existingCard.stats?.lastReviewed || 0;
-    const importLastReviewed = importCard.stats?.lastReviewed || 0;
-
-    if (importLastReviewed > existingLastReviewed) {
-      // Use imported stats as primary
-      mergedStats.difficulty = importCard.stats?.difficulty || null;
-      mergedStats.lastReviewed = importCard.stats?.lastReviewed || null;
-      mergedStats.reviewCount = (existingCard.stats?.reviewCount || 0) + (importCard.stats?.reviewCount || 0);
-    } else {
-      // Use existing stats as primary
-      mergedStats.difficulty = existingCard.stats?.difficulty || null;
-      mergedStats.lastReviewed = existingCard.stats?.lastReviewed || null;
-      mergedStats.reviewCount = (existingCard.stats?.reviewCount || 0) + (importCard.stats?.reviewCount || 0);
-    }
-
-    // Update the existing card with merged data
-    const updatedCard = {
-      ...existingCard,
-      translation: importCard.translation || existingCard.translation,
-      example: importCard.example || existingCard.example,
-      range_count: importCard.range_count || existingCard.range_count,
-      frequency: importCard.frequency || existingCard.frequency,
-      rank: importCard.rank !== undefined ? importCard.rank : existingCard.rank,
-      stats: mergedStats
-    };
-
-    await dataSyncService.saveCard(this.selectedLanguagePair, updatedCard);
-  }
-
-  async saveImportDeck(deckData) {
-    // Determine deck type and create appropriate structure
-    const isRankBased = deckData.startRank !== undefined;
-    
-    let normalizedDeck;
-    if (isRankBased) {
-      // Rank-based deck - preserve endRank as is (could be undefined for infinite)
-      normalizedDeck = {
-        deckName: deckData.deckName,
-        startRank: deckData.startRank,
-        endRank: deckData.endRank, // Don't default to 100, keep undefined for infinite
-        createdAt: deckData.createdAt || Date.now(),
-        updatedAt: Date.now()
-      };
-    } else {
-      // Card-based deck
-      normalizedDeck = {
-        deckName: deckData.deckName,
-        cards: deckData.cards || [],
-        createdAt: deckData.createdAt || Date.now(),
-        updatedAt: Date.now()
-      };
-    }
-
-    await dataSyncService.saveDeck(this.selectedLanguagePair, normalizedDeck);
-  }
-
-  async mergeDeckData(existingDeck, importDeck) {
-    // Determine deck type and merge accordingly
-    const isImportDeckRankBased = importDeck.startRank !== undefined;
-    const isExistingDeckRankBased = existingDeck.startRank !== undefined;
-    
-    // If both are rank-based, use imported deck directly (no merging needed)
-    if (isImportDeckRankBased && isExistingDeckRankBased) {
-      const updatedDeck = {
-        deckName: existingDeck.deckName, // Keep existing deck name
-        createdAt: existingDeck.createdAt || Date.now(), // Keep original creation time
-        updatedAt: Date.now(),
-        startRank: importDeck.startRank,
-        endRank: importDeck.endRank
-      };
-      
-      await dataSyncService.saveDeck(this.selectedLanguagePair, updatedDeck);
-      return;
-    }
-    
-    // When deck types disagree, imported deck takes precedence
-    if (isImportDeckRankBased !== isExistingDeckRankBased) {
-      let updatedDeck;
-      if (isImportDeckRankBased) {
-        // Converting to rank-based - only include rank-based properties
-        updatedDeck = {
-          deckName: existingDeck.deckName, // Keep existing deck name
-          createdAt: existingDeck.createdAt || Date.now(), // Keep original creation time
-          updatedAt: Date.now(),
-          startRank: importDeck.startRank,
-          endRank: importDeck.endRank
-        };
-      } else {
-        // Converting to card-based - only include card-based properties
-        updatedDeck = {
-          deckName: existingDeck.deckName, // Keep existing deck name
-          createdAt: existingDeck.createdAt || Date.now(), // Keep original creation time
-          updatedAt: Date.now(),
-          cards: importDeck.cards || []
-        };
-      }
-      
-      await dataSyncService.saveDeck(this.selectedLanguagePair, updatedDeck);
-      return;
-    }
-    
-    // Both are card-based - merge card lists
-    const existingCardKeys = new Set((existingDeck.cards || []).map(card => `${card.word}-${card.type}`));
-    const importCards = importDeck.cards || [];
-    const newCards = importCards.filter(card => !existingCardKeys.has(`${card.word}-${card.type}`));
-    
-    const updatedDeck = {
-      ...existingDeck,
-      cards: [...(existingDeck.cards || []), ...newCards],
-      updatedAt: Date.now()
-    };
-
-    await dataSyncService.saveDeck(this.selectedLanguagePair, updatedDeck);
-  }
-
+  
   showLoadingSpinner() {
     const overlay = this.container.querySelector('#loading-overlay');
     if (overlay) {
