@@ -607,13 +607,14 @@ header {
   margin: 0.5rem 0;
   padding: 0 0.5rem;
   flex-wrap: wrap;
+  justify-content: space-between;
 }
 
 .search-scope-label {
   color: var(--text-light);
   font-weight: 500;
   font-size: 0.9rem;
-  align-self: flex-start;
+  margin-right: 0.5rem;
 }
 
 .search-target-btn {
@@ -623,6 +624,8 @@ header {
 
 .search-scope-btn {
   flex-direction: column;
+  flex: 1;
+  min-width: 3rem; /* Allow buttons to shrink below min-width */
 }
 
 .search-target-btn,
@@ -642,7 +645,11 @@ header {
   justify-content: space-between;
   gap: 0.5rem;
   min-width: 80px;
-  flex: 0;
+}
+
+.search-scope-btn {
+  flex: 1;
+  min-width: 0; /* Allow buttons to shrink below min-width */
 }
 
 .search-target-btn:hover,
