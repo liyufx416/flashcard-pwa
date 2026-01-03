@@ -369,29 +369,33 @@ class CardDatabase {
     }
     
     // Apply difficulty filter
-    const difficulties = Object.keys(difficultyFilters).filter(key => difficultyFilters[key]);
-    if (difficulties.length === 0) {
-      return [];
-    }
-    
-    return cards.filter(card => {
-      const lastReviewed = card.stats?.lastReviewed;
-      const difficulty = lastReviewed? card.stats?.difficulty : null;
+    if (difficultyFilters) {
+      const difficulties = Object.keys(difficultyFilters).filter(key => difficultyFilters[key]);
+      if (difficulties.length === 0) {
+        return [];
+      }
       
-      if (difficulties.includes('new') && (difficulty === null || difficulty === undefined )) {
-        return true;
-      }
-      if (difficulties.includes('easy') && difficulty === 1) {
-        return true;
-      }
-      if (difficulties.includes('medium') && difficulty === 2) {
-        return true;
-      }
-      if (difficulties.includes('hard') && difficulty === 3) {
-        return true;
-      }
-      return false;
-    });
+      return cards.filter(card => {
+        const lastReviewed = card.stats?.lastReviewed;
+        const difficulty = lastReviewed? card.stats?.difficulty : null;
+        
+        if (difficulties.includes('new') && (difficulty === null || difficulty === undefined )) {
+          return true;
+        }
+        if (difficulties.includes('easy') && difficulty === 1) {
+          return true;
+        }
+        if (difficulties.includes('medium') && difficulty === 2) {
+          return true;
+        }
+        if (difficulties.includes('hard') && difficulty === 3) {
+          return true;
+        }
+        return false;
+      });
+    } else {
+      return cards;
+    }
   }
 
   async saveDeck(languagePair, deckName, deckData, overwrite = false) {

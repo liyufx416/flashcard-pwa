@@ -32,6 +32,19 @@ class WelcomeScreen {
     }
   }
 
+  show() {
+    this.container.style.display = 'block';
+    
+    // Check if user came from search and reopen search panel
+    if (this.cameFromSearch) {
+      this.cameFromSearch = false; // Reset flag
+      // Small delay to ensure the welcome screen is fully rendered
+      setTimeout(() => {
+        this.showSearchPanel();
+      }, 100);
+    }
+  }
+
   getTimeFilter() {
     const savedTimeFilter = localStorage.getItem('timeFilter');
     if (!savedTimeFilter) return null;
@@ -140,6 +153,70 @@ class WelcomeScreen {
       console.error('Error updating stats:', error);
       totalWordsEl.textContent = '0';
       masteredWordsEl.textContent = '0';
+    }
+  }
+
+  async updateSearchScopeCounts() {
+    if (!this.selectedLanguagePair) return;
+
+    try {
+      // Get current filters with null checks
+      const difficultyFilters = this.getDifficultyFilters() || {};
+      const timeFilter = this.getTimeFilter(); // This can be null and that's OK
+      const savedDeckKey = `selectedDeck_${this.selectedLanguagePair}`;
+      let selectedDeck = localStorage.getItem(savedDeckKey) || 'all';
+
+      // Ensure difficultyFilters is a valid object
+      const safeDifficultyFilters = difficultyFilters && typeof difficultyFilters === 'object' ? difficultyFilters : {};
+
+      let filteredCountNumber = 0;
+      let deckCountNumber = 0;
+      let allCountNumber = 0;
+
+      // Get filtered count (with difficulty and time filters applied)
+      try {
+        const filteredCount = await dataSyncService.getFilteredCards(this.selectedLanguagePair, safeDifficultyFilters, timeFilter, selectedDeck === 'all' ? null : selectedDeck);
+        filteredCountNumber = filteredCount ? filteredCount.length : 0;
+      } catch (error) {
+        console.error('Error getting filtered count:', error);
+        filteredCountNumber = 0;
+      }
+
+      // Get deck count (all cards in selected deck)
+      try {
+        const deckCount = await dataSyncService.getFilteredCards(this.selectedLanguagePair, null, null, selectedDeck === 'all' ? null : selectedDeck);
+        deckCountNumber = deckCount ? deckCount.length : 0;
+      } catch (error) {
+        console.error('Error getting deck count:', error);
+        // Fallback: use filtered count if deck is 'all', otherwise 0
+        if (selectedDeck === 'all') {
+          deckCountNumber = filteredCountNumber;
+        } else {
+          deckCountNumber = 0;
+        }
+      }
+
+      // Get all count (all cards in language pair)
+      try {
+        const allCount = await dataSyncService.getAllWords(this.selectedLanguagePair);
+        allCountNumber = allCount ? allCount.length : 0;
+      } catch (error) {
+        console.error('Error getting all count:', error);
+        // Fallback: use filtered count as approximation
+        allCountNumber = filteredCountNumber;
+      }
+
+      // Update the UI
+      const filteredBtn = this.container.querySelector('#search-scope-filtered .count');
+      const deckBtn = this.container.querySelector('#search-scope-deck .count');
+      const allBtn = this.container.querySelector('#search-scope-all .count');
+
+      if (filteredBtn) filteredBtn.textContent = filteredCountNumber;
+      if (deckBtn) deckBtn.textContent = deckCountNumber;
+      if (allBtn) allBtn.textContent = allCountNumber;
+
+    } catch (error) {
+      console.error('Error updating search scope counts:', error);
     }
   }
 
@@ -462,12 +539,33 @@ class WelcomeScreen {
           <div id="search-panel" class="search-panel hidden">
             <div class="search-panel-content">
               <div class="search-header">
-                <h3>Search Words</h3>
+                <h3>Search</h3>
+                <button id="search-target-word" class="search-target-btn active" data-target="word" style="min-width: 4rem;">
+                  Word
+                </button>
+                <button id="search-target-translation" class="search-target-btn" data-target="translation" style="min-width: 6rem;">
+                  Translation
+                </button>
                 <button id="close-search" class="close-btn">×</button>
               </div>
               <div class="search-input-container">
                 <input type="text" id="search-input" placeholder="Enter search pattern..." class="search-input" list="search-history" autocomplete="off">
                 <datalist id="search-history"></datalist>
+              </div>
+              <div class="search-scope-container">
+                <span class="search-scope-label">In </span>
+                <button id="search-scope-filtered" class="search-scope-btn active" data-scope="filtered">
+                  Filtered
+                  <Div class="count">0</Div>
+                </button>
+                <button id="search-scope-deck" class="search-scope-btn" data-scope="deck">
+                  Deck
+                  <Div class="count">0</Div>
+                </button>
+                <button id="search-scope-all" class="search-scope-btn" data-scope="all">
+                  All
+                  <Div class="count">0</Div>
+                </button>
               </div>
               <div class="search-buttons">
                 <button id="exact-search-btn" class="btn btn-primary">Exact Word</button>
@@ -817,6 +915,34 @@ class WelcomeScreen {
     }
   }
 
+  saveSearchConfig() {
+    const config = {
+      searchTarget: this.selectedSearchTarget,
+      searchScope: this.selectedSearchScope,
+      lastSearchTerm: this.lastSearchTerm || ''
+    };
+    localStorage.setItem('searchConfig', JSON.stringify(config));
+  }
+
+  loadSearchConfig() {
+    try {
+      const config = localStorage.getItem('searchConfig');
+      if (config) {
+        const parsedConfig = JSON.parse(config);
+        this.selectedSearchTarget = parsedConfig.searchTarget || 'word';
+        this.selectedSearchScope = parsedConfig.searchScope || 'deck';
+        this.lastSearchTerm = parsedConfig.lastSearchTerm || '';
+        return true;
+      } else {
+        this.selectedSearchTarget = 'word';
+        this.selectedSearchScope = 'deck';
+      }
+    } catch (error) {
+      console.error('Error loading search config:', error);
+    }
+    return false;
+  }
+
   showSearchPanel() {
     const searchPanel = this.container.querySelector('#search-panel');
     const searchInput = this.container.querySelector('#search-input');
@@ -824,17 +950,66 @@ class WelcomeScreen {
     const exactSearchBtn = this.container.querySelector('#exact-search-btn');
     const partialSearchBtn = this.container.querySelector('#partial-search-btn');
     const fuzzySearchBtn = this.container.querySelector('#fuzzy-search-btn');
-    const searchBtn = this.container.querySelector('#search-btn');
+    const searchTargetWord = this.container.querySelector('#search-target-word');
+    const searchTargetTranslation = this.container.querySelector('#search-target-translation');
 
     if (!searchPanel || !searchInput) return;
 
+    // Initialize event listeners array if not already initialized
+    if (!this.searchPanelEventListeners) {
+      this.searchPanelEventListeners = [];
+    }
+
     // Show the panel
     searchPanel.classList.remove('hidden');
+    
+    // Load search configuration
+    this.loadSearchConfig();
+    
+    // Set the appropriate search targets button as active
+    searchTargetWord.classList.remove('active');
+    searchTargetTranslation.classList.remove('active');
+    if (this.selectedSearchTarget === 'word') {
+      searchTargetWord.classList.add('active');
+    } else if (this.selectedSearchTarget === 'translation') {
+      searchTargetTranslation.classList.add('active');
+    } else if (this.selectedSearchTarget === 'both') {
+      searchTargetWord.classList.add('active');
+      searchTargetTranslation.classList.add('active');
+    }
+    
+    // Restore search scope buttons
+    const searchScopeBtns = this.container.querySelectorAll('.search-scope-btn');
+    searchScopeBtns.forEach(btn => {
+      btn.classList.remove('active');
+      if (btn.dataset.scope === this.selectedSearchScope) {
+        btn.classList.add('active');
+      }
+    });
+    
+    // Restore last search term
+    if (this.lastSearchTerm) {
+      searchInput.value = this.lastSearchTerm;
+    }
+    
+    // Focus on search input
+    searchInput.removeAttribute('list');
     searchInput.focus();
     
-    // Initially remove the list attribute to prevent datalist from showing
-    searchInput.removeAttribute('list');
-    
+    // Update search scope counts
+    this.updateSearchScopeCounts();
+
+    // Clear any previous error state
+    searchInput.classList.remove('search-input-error');
+
+    // Close button
+    if (closeBtn) {
+      const closeHandler = () => {
+        this.cleanupSearchPanel();
+      };
+      closeBtn.onclick = closeHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: closeHandler, target: closeBtn });
+    }
     // Update datalist and simulate a click to trigger it naturally
     this.updateSearchHistoryDatalist();
     
@@ -842,10 +1017,7 @@ class WelcomeScreen {
     setTimeout(() => {
       searchInput.setAttribute('list', 'search-history');
       searchInput.click();
-    }, 1000);
-
-    // Store event listeners for cleanup
-    this.searchPanelEventListeners = [];
+    }, 100);
 
     // Close panel when clicking outside (only if search input is empty)
     const closeOnOutsideClick = (e) => {
@@ -900,6 +1072,75 @@ class WelcomeScreen {
       this.searchPanelEventListeners.push({ type: 'click', handler: fuzzySearchHandler, target: fuzzySearchBtn });
     }
 
+    if (searchTargetWord && searchTargetTranslation){
+      const searchTargetWordHandler = () => {
+        if (searchTargetWord.classList.contains('active')) {
+          if (searchTargetTranslation.classList.contains('active')) {
+            searchTargetWord.classList.remove('active');
+            this.selectedSearchTarget = 'translation';
+          }
+        } else {
+          searchTargetWord.classList.add('active');
+          if (!searchTargetTranslation.classList.contains('active')) {
+            this.selectedSearchTarget = 'word';
+          } else {
+            this.selectedSearchTarget = 'both';
+          }
+        }
+        // Save configuration
+        this.saveSearchConfig();
+      };
+      searchTargetWord.onclick = searchTargetWordHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: searchTargetWordHandler, target: searchTargetWord });
+
+      const searchTargetTranslationHandler = () => {
+        if (searchTargetTranslation.classList.contains('active')) {
+          if (searchTargetWord.classList.contains('active')) {
+            searchTargetTranslation.classList.remove('active');
+            this.selectedSearchTarget = 'word';
+          }
+        } else {
+          searchTargetTranslation.classList.add('active');
+          if (!searchTargetWord.classList.contains('active')) {
+            this.selectedSearchTarget = 'translation';
+          } else {
+            this.selectedSearchTarget = 'both';
+          }
+        }
+        // Save configuration
+        this.saveSearchConfig();
+      };
+      searchTargetTranslation.onclick = searchTargetTranslationHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: searchTargetTranslationHandler, target: searchTargetTranslation });
+    }
+
+    // Search scope buttons
+    const scopeBtns = this.container.querySelectorAll('.search-scope-btn');
+    scopeBtns.forEach(btn => {
+      const scopeHandler = () => {
+        // Remove active class from all scope buttons
+        scopeBtns.forEach(b => b.classList.remove('active'));
+        // Add active class to clicked button
+        btn.classList.add('active');
+        
+        // Store the selected scope
+        this.selectedSearchScope = btn.dataset.scope;
+        console.log(`Search scope changed to: ${this.selectedSearchScope}`);
+        // Save configuration
+        this.saveSearchConfig();
+      };
+      btn.onclick = scopeHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: scopeHandler, target: btn });
+    });
+
+    // Save search term as user types
+    const inputHandler = () => {
+      this.lastSearchTerm = searchInput.value;
+      this.saveSearchConfig();
+    };
+    searchInput.oninput = inputHandler;
+    this.searchPanelEventListeners.push({ type: 'input', handler: inputHandler, target: searchInput });
+
     // Enter key to search, Escape to close
     const keyHandler = (e) => {
       if (e.key === 'Enter') {
@@ -933,12 +1174,20 @@ class WelcomeScreen {
           listener.target.onkeydown = null;
         }
       });
+      if (!this.cameFromSearch) {
+        this.lastSearchTerm = '';
+        this.saveSearchConfig();
+      }
+      this.searchResults = null;
+      this.deckFilter = null;
       this.searchPanelEventListeners = [];
+      this.selectedSearchScope = 'filtered'; // Default search scope
+      this.selectedSearchTarget = 'word'; // Default search target
+      this.cameFromSearch = false; // Track if user came from search panel
     }
     
     this.hideSearchPanel();
   }
-
   hideSearchPanel() {
     const searchPanel = this.container.querySelector('#search-panel');
     const searchInput = this.container.querySelector('#search-input');
@@ -1023,18 +1272,42 @@ class WelcomeScreen {
     }
 
     try {
-      // Get the current difficulty, time, and deck filters
-      const difficultyFilters = this.getDifficultyFilters();
-      const timeFilter = this.getTimeFilter();
-      const selectedDeck = this.getSelectedDeck();
+      // Get the current difficulty, time, and deck filters with null checks
+      const difficultyFilters = this.getDifficultyFilters() || {};
+      const timeFilter = this.getTimeFilter(); // This can be null and that's OK
+      const selectedDeck = this.getSelectedDeck() || 'all';
 
-      // Get filtered words based on current difficulty, time, and deck filters
-      const filteredWords = await dataSyncService.getFilteredCards(this.selectedLanguagePair, difficultyFilters, timeFilter, selectedDeck);
+      // Ensure difficultyFilters is a valid object
+      const safeDifficultyFilters = difficultyFilters && typeof difficultyFilters === 'object' ? difficultyFilters : {};
+
+      // Get cards based on selected search scope
+      let searchBaseCards;
       
-      if (!filteredWords || filteredWords.length === 0) {
-        alert('No words available with current filters. Please adjust your difficulty or time filters.');
+      switch (this.selectedSearchScope) {
+        case 'filtered':
+          // Filtered: Cards with difficulty, time, and deck filters applied
+          searchBaseCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, safeDifficultyFilters, timeFilter, selectedDeck === 'all' ? null : selectedDeck);
+          break;
+        case 'deck':
+          // Deck: All cards in selected deck (no difficulty or time filters)
+          searchBaseCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, null, null, selectedDeck === 'all' ? null : selectedDeck);
+          break;
+        case 'all':
+          // All: All cards in language pair (no filters)
+          searchBaseCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, null, null, null);
+          break;
+        default:
+          // Default to filtered
+          searchBaseCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, safeDifficultyFilters, timeFilter, selectedDeck === 'all' ? null : selectedDeck);
+      }
+      
+      if (!searchBaseCards || searchBaseCards.length === 0) {
+        const scopeName = this.selectedSearchScope.charAt(0).toUpperCase() + this.selectedSearchScope.slice(1);
+        alert(`No words available in ${scopeName} scope. Please try a different scope or adjust your filters.`);
         return;
       }
+
+      console.log(`Searching in ${this.selectedSearchScope} scope with ${searchBaseCards.length} cards`);
 
       let searchResults;
       
@@ -1045,33 +1318,66 @@ class WelcomeScreen {
         // Create accent-insensitive regex to match whole word boundaries
         const wordRegex = TextUtils.createAccentInsensitiveRegex(searchTerm);
         
-        searchResults = filteredWords.filter(word => {
-          // Check if search term matches as a whole word in either word or translation (accent-insensitive)
-          const wordMatch = wordRegex.test(TextUtils.removeAccents(word.word));
-          const translationMatch = wordRegex.test(TextUtils.removeAccents(word.translation));
+        searchResults = searchBaseCards.filter(word => {
+          // Check if search term matches based on selected target
+          let wordMatch = false;
+          let translationMatch = false;
+          
+          if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'word') {
+            wordMatch = wordRegex.test(TextUtils.removeAccents(word.word));
+          }
+          if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'translation') {
+            translationMatch = wordRegex.test(TextUtils.removeAccents(word.translation));
+          }
+          
           return wordMatch || translationMatch;
         });
       } else if (searchMode === 'partial') {
         // Partial match (accent-insensitive)
         const searchTermNoAccents = TextUtils.createAccentInsensitiveTerm(searchTerm);
         
-        searchResults = filteredWords.filter(word => 
-          TextUtils.accentInsensitiveMatch(word.word, searchTerm) || 
-          TextUtils.accentInsensitiveMatch(word.translation, searchTerm)
-        );
+        searchResults = searchBaseCards.filter(word => {
+          // Check if search term matches based on selected target
+          let wordMatch = false;
+          let translationMatch = false;
+          
+          if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'word') {
+            wordMatch = TextUtils.accentInsensitiveMatch(word.word, searchTerm);
+          }
+          if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'translation') {
+            translationMatch = TextUtils.accentInsensitiveMatch(word.translation, searchTerm);
+          }
+          
+          return wordMatch || translationMatch;
+        });
       } else {
         // Fuzzy search using Fuse.js with accent-insensitive matching
         const searchTermNoAccents = TextUtils.createAccentInsensitiveTerm(searchTerm);
         
-        // Create accent-free versions of all words for fuzzy matching
-        const wordsNoAccents = filteredWords.map(word => ({
-          ...word,
-          wordNoAccents: TextUtils.removeAccents(word.word),
-          translationNoAccents: TextUtils.removeAccents(word.translation)
-        }));
+        // Create accent-free versions of words for fuzzy matching based on selected target
+        let wordsNoAccents;
+        if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'word') {
+          wordsNoAccents = searchBaseCards.map(word => ({
+            ...word,
+            wordNoAccents: TextUtils.removeAccents(word.word)
+          }));
+        } else if (this.selectedSearchTarget === 'translation') {
+          wordsNoAccents = searchBaseCards.map(word => ({
+            ...word,
+            translationNoAccents: TextUtils.removeAccents(word.translation)
+          }));
+        } else {
+          // Both - include both word and translation
+          wordsNoAccents = searchBaseCards.map(word => ({
+            ...word,
+            wordNoAccents: TextUtils.removeAccents(word.word),
+            translationNoAccents: TextUtils.removeAccents(word.translation)
+          }));
+        }
         
         const fuseOptions = {
-          keys: ['wordNoAccents', 'translationNoAccents'],
+          keys: this.selectedSearchTarget === 'both' ? ['wordNoAccents', 'translationNoAccents'] : 
+                this.selectedSearchTarget === 'word' ? ['wordNoAccents'] : ['translationNoAccents'],
           threshold: 0.3, // Lower threshold = more strict matching
           isCaseSensitive: false,
           includeScore: true,
@@ -1095,6 +1401,7 @@ class WelcomeScreen {
       this.saveSearchHistory(searchTerm);
 
       // Clean up and hide search panel
+      this.cameFromSearch = true; // Mark that user came from search
       this.cleanupSearchPanel();
 
       // Start study session with search results
