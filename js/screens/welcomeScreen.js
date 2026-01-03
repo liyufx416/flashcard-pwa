@@ -543,7 +543,7 @@ class WelcomeScreen {
                 <button id="search-target-word" class="search-target-btn active" data-target="word" style="min-width: 4rem;">
                   Word
                 </button>
-                <button id="search-target-translation" class="search-target-btn" data-target="translation" style="min-width: 6rem;">
+                <button id="search-target-translation" class="search-target-btn" data-target="translation" style="min-width: 6.5rem;">
                   Translation
                 </button>
                 <button id="close-search" class="close-btn">×</button>
@@ -1016,7 +1016,6 @@ class WelcomeScreen {
     // Simulate a click to trigger the datalist dropdown
     setTimeout(() => {
       searchInput.setAttribute('list', 'search-history');
-      searchInput.click();
     }, 100);
 
     // Close panel when clicking outside (only if search input is empty)
