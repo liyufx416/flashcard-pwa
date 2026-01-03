@@ -687,6 +687,16 @@ class StudyScreen {
     const currentCard = this.cards[this.currentCardIndex];
     const correctTranslation = this.reverseDirection ? currentCard.word : currentCard.translation;
     
+    // Second comparison: without accents
+    const userInputNoAccents = TextUtils.removeAccents(userInput);
+    const correctTranslationNoAccents = TextUtils.removeAccents(correctTranslation);
+
+    // First, check for exact match (accent-insensitive)
+    const exactMatchRegex = TextUtils.createAccentInsensitiveRegex(userInputNoAccents);
+    const isExactMatch = exactMatchRegex.test(correctTranslationNoAccents);
+    
+    console.log(`Exact match check: "${userInputNoAccents}" vs "${correctTranslationNoAccents}" = ${isExactMatch}`);
+    
     // Create a Fuse instance for fuzzy matching
     const options = {
       includeScore: true,
@@ -706,9 +716,6 @@ class StudyScreen {
       similarityWithAccents = Math.round((1 - score) * 100);
     }
     
-    // Second comparison: without accents
-    const userInputNoAccents = TextUtils.removeAccents(userInput);
-    const correctTranslationNoAccents = TextUtils.removeAccents(correctTranslation);
     const translationsNoAccents = [{ translation: correctTranslationNoAccents }];
     const fuseNoAccents = new Fuse(translationsNoAccents, options);
     const resultNoAccents = fuseNoAccents.search(userInputNoAccents);
@@ -725,11 +732,14 @@ class StudyScreen {
     const accentDifference = similarityNoAccents - similarityWithAccents;
     const needsAccentCheck = accentDifference >= 10 && similarityNoAccents >= 90;
     
-    // Use the higher similarity score for feedback
-    const finalSimilarity = Math.max(similarityWithAccents, similarityNoAccents);
+    // Use the higher similarity score from fuzzy matching, but cap at 90
+    const fuzzySimilarity = Math.max(similarityWithAccents, similarityNoAccents);
+    const finalSimilarity = isExactMatch ? 100 : Math.min(fuzzySimilarity, 90);
+    
+    console.log(`Fuzzy similarity: ${fuzzySimilarity}%, final similarity: ${finalSimilarity}%`);
     
     // Show feedback on button
-    if (finalSimilarity === 100) {
+    if (isExactMatch) {
       this.showCheckButtonFeedback('100%', 'perfect', isList);
     } else if (finalSimilarity > 0) {
       this.showCheckButtonFeedback(`${finalSimilarity}%`, 'partial', isList);
@@ -764,12 +774,12 @@ class StudyScreen {
       // For card view, find the translation input container on the front card
       const translationInputContainer = this.container.querySelector('.card-front .translation-input-container');
       if (translationInputContainer) {
-        this.addAccentWarningToElement(translationInputContainer);
+        this.addCardAccentWarningToElement(translationInputContainer);
       }
     }
   }
 
-  addAccentWarningToElement(container) {
+  addCardAccentWarningToElement(container) {
     // Remove any existing accent warning
     const existingWarning = container.parentNode.querySelector('.card-accent-warning');
     if (existingWarning) {
@@ -780,6 +790,13 @@ class StudyScreen {
     const warningDiv = document.createElement('div');
     warningDiv.className = 'card-accent-warning';
     warningDiv.textContent = 'Check accent';
+    warningDiv.style.cursor = 'pointer';
+    
+    // Add click handler to flip the card
+    warningDiv.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleCard();
+    });
     
     // Insert after the translation input container (as a new row)
     container.parentNode.insertBefore(warningDiv, container.nextSibling);
