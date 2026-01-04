@@ -1,7 +1,8 @@
 const DB_NAME = 'FlashcardDB';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 const CARD_STORE = 'cards';
 const DECK_STORE = 'decks';
+const LANGUAGE_PAIR_STORE = 'languagePairs';
 
 class CardDatabase {
   constructor() {
@@ -49,6 +50,18 @@ class CardDatabase {
           deckStore.createIndex('deckName', 'deckName', { unique: false });
           
           console.log('Created decks object store for version 5');
+        }
+        
+        // Handle version 5 to 6 migration (add language pairs store)
+        if (oldVersion < 6) {
+          // Create language pairs object store
+          const languagePairStore = db.createObjectStore(LANGUAGE_PAIR_STORE, { 
+            keyPath: 'id' 
+          });
+          
+          languagePairStore.createIndex('name', 'name', { unique: false });
+          
+          console.log('Created language pairs object store for version 6');
         }
       };
     });
@@ -217,12 +230,34 @@ class CardDatabase {
     if (deckFilter && deckFilter !== 'all') {
       const deck = await this.getDeck(languagePair, deckFilter);
       if (deck) {
-        const deckCardKeys = new Set(
-          deck.cards.map(card => `${card.word}-${card.type}`)
-        );
-        cards = cards.filter(card => 
-          deckCardKeys.has(`${card.word}-${card.type}`)
-        );
+        // Check if this is a rank-based deck or card-based deck
+        if (deck.startRank !== undefined) {
+          // Rank-based deck - filter by rank range
+          const startRank = deck.startRank;
+          const endRank = deck.endRank || Infinity;
+          
+          // Check if any cards have ranks
+          const cardsWithRanks = cards.filter(card => card.rank !== undefined && card.rank !== null);
+          
+          if (cardsWithRanks.length === 0) {
+            // No cards have ranks, rank-based deck filtering won't work
+            // Return empty counts for rank-based decks when cards have no ranks
+            return { new: 0, easy: 0, medium: 0, hard: 0 };
+          }
+          
+          cards = cards.filter(card => {
+            const rank = card.rank;
+            return rank && rank >= startRank && rank <= endRank;
+          });
+        } else {
+          // Card-based deck - filter by explicit card list
+          const deckCardKeys = new Set(
+            deck.cards.map(card => `${card.word}-${card.type}`)
+          );
+          cards = cards.filter(card => 
+            deckCardKeys.has(`${card.word}-${card.type}`)
+          );
+        }
       } else {
         // Deck not found, return empty counts
         return { new: 0, easy: 0, medium: 0, hard: 0 };
@@ -303,12 +338,25 @@ class CardDatabase {
     if (deckFilter && deckFilter !== 'all') {
       const deck = await this.getDeck(languagePair, deckFilter);
       if (deck) {
-        const deckCardKeys = new Set(
-          deck.cards.map(card => `${card.word}-${card.type}`)
-        );
-        cards = cards.filter(card => 
-          deckCardKeys.has(`${card.word}-${card.type}`)
-        );
+        // Check if this is a rank-based deck or card-based deck
+        if (deck.startRank !== undefined) {
+          // Rank-based deck - filter by rank range
+          const startRank = deck.startRank;
+          const endRank = deck.endRank || Infinity;
+          
+          cards = cards.filter(card => {
+            const rank = card.rank;
+            return rank && rank >= startRank && rank <= endRank;
+          });
+        } else {
+          // Card-based deck - filter by explicit card list
+          const deckCardKeys = new Set(
+            deck.cards.map(card => `${card.word}-${card.type}`)
+          );
+          cards = cards.filter(card => 
+            deckCardKeys.has(`${card.word}-${card.type}`)
+          );
+        }
       } else {
         // Deck not found, return empty array
         return [];
@@ -321,29 +369,33 @@ class CardDatabase {
     }
     
     // Apply difficulty filter
-    const difficulties = Object.keys(difficultyFilters).filter(key => difficultyFilters[key]);
-    if (difficulties.length === 0) {
-      return [];
-    }
-    
-    return cards.filter(card => {
-      const lastReviewed = card.stats?.lastReviewed;
-      const difficulty = lastReviewed? card.stats?.difficulty : null;
+    if (difficultyFilters) {
+      const difficulties = Object.keys(difficultyFilters).filter(key => difficultyFilters[key]);
+      if (difficulties.length === 0) {
+        return [];
+      }
       
-      if (difficulties.includes('new') && (difficulty === null || difficulty === undefined )) {
-        return true;
-      }
-      if (difficulties.includes('easy') && difficulty === 1) {
-        return true;
-      }
-      if (difficulties.includes('medium') && difficulty === 2) {
-        return true;
-      }
-      if (difficulties.includes('hard') && difficulty === 3) {
-        return true;
-      }
-      return false;
-    });
+      return cards.filter(card => {
+        const lastReviewed = card.stats?.lastReviewed;
+        const difficulty = lastReviewed? card.stats?.difficulty : null;
+        
+        if (difficulties.includes('new') && (difficulty === null || difficulty === undefined )) {
+          return true;
+        }
+        if (difficulties.includes('easy') && difficulty === 1) {
+          return true;
+        }
+        if (difficulties.includes('medium') && difficulty === 2) {
+          return true;
+        }
+        if (difficulties.includes('hard') && difficulty === 3) {
+          return true;
+        }
+        return false;
+      });
+    } else {
+      return cards;
+    }
   }
 
   async saveDeck(languagePair, deckName, deckData, overwrite = false) {
@@ -358,40 +410,67 @@ class CardDatabase {
         
         if (existingDeck && !overwrite) {
           // Merge mode: combine existing and new cards, avoid duplicates
-          const existingCardKeys = new Set(
-            existingDeck.cards.map(card => `${card.word}-${card.type}`)
-          );
-          
-          const newCards = deckData.cards.filter(card => 
-            !existingCardKeys.has(`${card.word}-${card.type}`)
-          ).map(card => ({
-            word: card.word,
-            type: card.type
-          }));
-          
-          finalDeck = {
-            languagePair,
-            deckName,
-            cards: [...existingDeck.cards, ...newCards],
-            createdAt: existingDeck.createdAt,
-            updatedAt: Date.now()
-          };
-          
-          console.log(`Merged deck "${deckName}": added ${newCards.length} new cards`);
-        } else {
-          // Overwrite mode or new deck
-          finalDeck = {
-            languagePair,
-            deckName,
-            cards: deckData.cards.map(card => ({
+          if (deckData.startRank !== undefined) {
+            // Rank-based deck - just update timestamps, keep rank info
+            finalDeck = {
+              languagePair,
+              deckName,
+              startRank: deckData.startRank,
+              endRank: deckData.endRank,
+              createdAt: existingDeck.createdAt,
+              updatedAt: Date.now()
+            };
+            console.log(`Merged rank-based deck "${deckName}"`);
+          } else {
+            // Card-based deck - merge cards
+            const existingCardKeys = new Set(
+              existingDeck.cards.map(card => `${card.word}-${card.type}`)
+            );
+            
+            const newCards = deckData.cards.filter(card => 
+              !existingCardKeys.has(`${card.word}-${card.type}`)
+            ).map(card => ({
               word: card.word,
               type: card.type
-            })),
-            createdAt: existingDeck?.createdAt || Date.now(),
-            updatedAt: Date.now()
-          };
-          
-          console.log(`${existingDeck ? 'Overwrote' : 'Created'} deck "${deckName}" with ${finalDeck.cards.length} cards`);
+            }));
+            
+            finalDeck = {
+              languagePair,
+              deckName,
+              cards: [...existingDeck.cards, ...newCards],
+              createdAt: existingDeck.createdAt,
+              updatedAt: Date.now()
+            };
+            
+            console.log(`Merged deck "${deckName}": added ${newCards.length} new cards`);
+          }
+        } else {
+          // Overwrite mode or new deck
+          if (deckData.startRank !== undefined) {
+            // Rank-based deck
+            finalDeck = {
+              languagePair,
+              deckName,
+              startRank: deckData.startRank,
+              endRank: deckData.endRank,
+              createdAt: existingDeck?.createdAt || Date.now(),
+              updatedAt: Date.now()
+            };
+            console.log(`${existingDeck ? 'Overwrote' : 'Created'} rank-based deck "${deckName}"`);
+          } else {
+            // Card-based deck
+            finalDeck = {
+              languagePair,
+              deckName,
+              cards: deckData.cards.map(card => ({
+                word: card.word,
+                type: card.type
+              })),
+              createdAt: existingDeck?.createdAt || Date.now(),
+              updatedAt: Date.now()
+            };
+            console.log(`${existingDeck ? 'Overwrote' : 'Created'} deck "${deckName}" with ${finalDeck.cards.length} cards`);
+          }
         }
         
         const transaction = this.db.transaction([DECK_STORE], 'readwrite');
@@ -428,6 +507,61 @@ class CardDatabase {
       const store = transaction.objectStore(DECK_STORE);
       const index = store.index('languagePair');
       const request = index.getAll(languagePair);
+      
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getAllLanguagePairs() {
+    // Get language pairs from metadata store instead of card data
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([LANGUAGE_PAIR_STORE], 'readonly');
+      const store = transaction.objectStore(LANGUAGE_PAIR_STORE);
+      const request = store.getAllKeys();
+      
+      request.onsuccess = () => {
+        // Get unique language pair IDs from metadata
+        const languagePairs = request.result || [];
+        resolve(languagePairs);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getLanguagePairMetadata(languagePairId) {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([LANGUAGE_PAIR_STORE], 'readonly');
+      const store = transaction.objectStore(LANGUAGE_PAIR_STORE);
+      const request = store.get(languagePairId);
+      
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async saveLanguagePairMetadata(languagePairMetadata) {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([LANGUAGE_PAIR_STORE], 'readwrite');
+      const store = transaction.objectStore(LANGUAGE_PAIR_STORE);
+      const request = store.put(languagePairMetadata);
+      
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getAllLanguagePairMetadata() {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([LANGUAGE_PAIR_STORE], 'readonly');
+      const store = transaction.objectStore(LANGUAGE_PAIR_STORE);
+      const request = store.getAll();
       
       request.onsuccess = () => resolve(request.result || []);
       request.onerror = () => reject(request.error);

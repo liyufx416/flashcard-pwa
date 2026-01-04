@@ -29,7 +29,7 @@ class FlashcardApp {
   }
 
   // Show welcome screen
-  showWelcomeScreen() {
+  showWelcomeScreen(showSearchPanel = false) {
     this.currentScreen = new WelcomeScreen(
       this.container,
       (languagePairId, reverseDirection, searchResults = null, deckFilter = null) => this.startStudy(languagePairId, reverseDirection, searchResults, deckFilter),
@@ -39,6 +39,12 @@ class FlashcardApp {
     
     // Perform initial sync for the selected language pair to load deck data
     this.performInitialSync();
+
+    if (showSearchPanel) {
+      setTimeout(() => {
+        this.currentScreen.showSearchPanel();
+      }, 300);
+    }
   }
 
   // Perform initial sync for the currently selected language pair
@@ -73,7 +79,7 @@ class FlashcardApp {
       this.container,
       languagePairId,
       reverseDirection,
-      () => this.showWelcomeScreen(),
+      () => this.showWelcomeScreen(searchResults !== null),
       searchResults,
       deckFilter
     );
