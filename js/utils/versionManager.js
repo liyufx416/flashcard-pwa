@@ -45,7 +45,7 @@ class VersionManager {
         
         // hit /clear-cache endpoint to clear browser cache and reload
         await fetch('/clear-cache');
-        window.location.reload();
+        window.location.reload(true);
         return true; // Indicate that reload was triggered
       } else {
         console.log(`Version ${currentVersion} is up to date`);

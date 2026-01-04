@@ -1,6 +1,7 @@
 import dataSyncService from '../services/dataSyncService.js';
 import speechService from '../utils/speechService.js';
 import AppInfoModal from '../utils/appInfoModal.js';
+import TextUtils from '../utils/textUtils.js';
 
 class WelcomeScreen {
   constructor(container, onStartStudy, onManageCards) {
@@ -28,6 +29,19 @@ class WelcomeScreen {
         statsSection.style.display = 'block';
         console.log('Stats panel visible - manage button visible');
       }
+    }
+  }
+
+  show() {
+    this.container.style.display = 'block';
+    
+    // Check if user came from search and reopen search panel
+    if (this.cameFromSearch) {
+      this.cameFromSearch = false; // Reset flag
+      // Small delay to ensure the welcome screen is fully rendered
+      setTimeout(() => {
+        this.showSearchPanel();
+      }, 100);
     }
   }
 
@@ -142,6 +156,70 @@ class WelcomeScreen {
     }
   }
 
+  async updateSearchScopeCounts() {
+    if (!this.selectedLanguagePair) return;
+
+    try {
+      // Get current filters with null checks
+      const difficultyFilters = this.getDifficultyFilters() || {};
+      const timeFilter = this.getTimeFilter(); // This can be null and that's OK
+      const savedDeckKey = `selectedDeck_${this.selectedLanguagePair}`;
+      let selectedDeck = localStorage.getItem(savedDeckKey) || 'all';
+
+      // Ensure difficultyFilters is a valid object
+      const safeDifficultyFilters = difficultyFilters && typeof difficultyFilters === 'object' ? difficultyFilters : {};
+
+      let filteredCountNumber = 0;
+      let deckCountNumber = 0;
+      let allCountNumber = 0;
+
+      // Get filtered count (with difficulty and time filters applied)
+      try {
+        const filteredCount = await dataSyncService.getFilteredCards(this.selectedLanguagePair, safeDifficultyFilters, timeFilter, selectedDeck === 'all' ? null : selectedDeck);
+        filteredCountNumber = filteredCount ? filteredCount.length : 0;
+      } catch (error) {
+        console.error('Error getting filtered count:', error);
+        filteredCountNumber = 0;
+      }
+
+      // Get deck count (all cards in selected deck)
+      try {
+        const deckCount = await dataSyncService.getFilteredCards(this.selectedLanguagePair, null, null, selectedDeck === 'all' ? null : selectedDeck);
+        deckCountNumber = deckCount ? deckCount.length : 0;
+      } catch (error) {
+        console.error('Error getting deck count:', error);
+        // Fallback: use filtered count if deck is 'all', otherwise 0
+        if (selectedDeck === 'all') {
+          deckCountNumber = filteredCountNumber;
+        } else {
+          deckCountNumber = 0;
+        }
+      }
+
+      // Get all count (all cards in language pair)
+      try {
+        const allCount = await dataSyncService.getAllWords(this.selectedLanguagePair);
+        allCountNumber = allCount ? allCount.length : 0;
+      } catch (error) {
+        console.error('Error getting all count:', error);
+        // Fallback: use filtered count as approximation
+        allCountNumber = filteredCountNumber;
+      }
+
+      // Update the UI
+      const filteredBtn = this.container.querySelector('#search-scope-filtered .count');
+      const deckBtn = this.container.querySelector('#search-scope-deck .count');
+      const allBtn = this.container.querySelector('#search-scope-all .count');
+
+      if (filteredBtn) filteredBtn.textContent = filteredCountNumber;
+      if (deckBtn) deckBtn.textContent = deckCountNumber;
+      if (allBtn) allBtn.textContent = allCountNumber;
+
+    } catch (error) {
+      console.error('Error updating search scope counts:', error);
+    }
+  }
+
   async updateDifficultyCounts(forceSync = false) {
     if (!this.selectedLanguagePair) return;
 
@@ -227,9 +305,14 @@ class WelcomeScreen {
 
   async loadLanguagePairs() {
     try {
-      const response = await fetch('/data/metadata.json');
-      const data = await response.json();
-      this.languagePairs = data.languagePairs;
+      // Initialize language pair metadata from metadata.json if needed
+      await dataSyncService.initializeLanguagePairMetadata();
+
+      // Get all language pairs with metadata
+      this.languagePairs = await dataSyncService.getAllLanguagePairMetadata();
+      
+      // Sort alphabetically by name
+      this.languagePairs.sort((a, b) => a.name.localeCompare(b.name));
       
       // Get saved language pair or use the first one
       const savedLanguagePair = localStorage.getItem('selectedLanguagePair');
@@ -245,6 +328,7 @@ class WelcomeScreen {
     }
   }
 
+  
   getAvailableLanguagePairs() {
     return this.languagePairs ? this.languagePairs.map(pair => pair.id) : [];
   }
@@ -282,18 +366,47 @@ class WelcomeScreen {
         deckSelect.innerHTML = `<option value="all">Deck: All Cards (${totalCardCount} cards)</option>`;
         
         // Add deck options with card counts
-        decks.forEach(deck => {
+        for (const deck of decks) {
           const option = document.createElement('option');
           option.value = deck.deckName;
-          const cardCount = deck.cards ? deck.cards.length : 0;
+          
+          let cardCount;
+          if (deck.startRank !== undefined) {
+            // Rank-based deck - get count by filtering cards by rank range
+            const deckCounts = await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, null, deck.deckName);
+            cardCount = deckCounts.new + deckCounts.hard + deckCounts.medium + deckCounts.easy;
+          } else {
+            // Card-based deck - use explicit card list
+            cardCount = deck.cards ? deck.cards.length : 0;
+          }
+          
           option.textContent = `Deck: ${deck.deckName} (${cardCount} cards)`;
           deckSelect.appendChild(option);
-        });
+        }
 
-        // Restore saved deck selection
-        const savedDeck = localStorage.getItem('selectedDeck');
+        // Restore saved deck selection for current language pair
+        const savedDeckKey = `selectedDeck_${this.selectedLanguagePair}`;
+        let savedDeck = localStorage.getItem(savedDeckKey);
+        
+        // Migrate old global deck selection if this is the first load for this language pair
+        if (!savedDeck) {
+          const oldGlobalDeck = localStorage.getItem('selectedDeck');
+          if (oldGlobalDeck && oldGlobalDeck !== 'all') {
+            // Check if the old deck exists for this language pair
+            if (decks.some(deck => deck.deckName === oldGlobalDeck)) {
+              savedDeck = oldGlobalDeck;
+              localStorage.setItem(savedDeckKey, savedDeck);
+            }
+          }
+          // Clean up old global deck selection
+          localStorage.removeItem('selectedDeck');
+        }
+        
         if (savedDeck && decks.some(deck => deck.deckName === savedDeck)) {
           deckSelect.value = savedDeck;
+        } else {
+          // Default to "All Cards" if no saved deck for this language pair
+          deckSelect.value = 'all';
         }
         
         // Update all counts to reflect the selected deck
@@ -312,9 +425,11 @@ class WelcomeScreen {
     } catch (error) {
       console.error('Error loading decks:', error);
       // Retry after a short delay
+      /*
       setTimeout(() => {
         this.loadDecks();
       }, 1000);
+      */
     }
   }
 
@@ -369,7 +484,10 @@ class WelcomeScreen {
                   ${pair.name}
                 </option>`
               ).join('')}
+              <option value="import-data">Import data...</option>
             </select>
+            <!-- Hidden file input for import -->
+            <input type="file" id="import-file-input" accept=".json" style="display: none;">
             <div class="deck-selector" id="deck-selector" style="display: none;">
             <select id="deck-select" class="form-select">
             <option value="all">Deck: All Cards</option>
@@ -421,12 +539,33 @@ class WelcomeScreen {
           <div id="search-panel" class="search-panel hidden">
             <div class="search-panel-content">
               <div class="search-header">
-                <h3>Search Words</h3>
+                <h3>Search</h3>
+                <button id="search-target-word" class="search-target-btn active" data-target="word" style="min-width: 4rem;">
+                  Word
+                </button>
+                <button id="search-target-translation" class="search-target-btn" data-target="translation" style="min-width: 6.5rem;">
+                  Translation
+                </button>
                 <button id="close-search" class="close-btn">×</button>
               </div>
               <div class="search-input-container">
                 <input type="text" id="search-input" placeholder="Enter search pattern..." class="search-input" list="search-history" autocomplete="off">
                 <datalist id="search-history"></datalist>
+              </div>
+              <div class="search-scope-container">
+                <span class="search-scope-label">In </span>
+                <button id="search-scope-filtered" class="search-scope-btn active" data-scope="filtered">
+                  Filtered
+                  <Div class="count">0</Div>
+                </button>
+                <button id="search-scope-deck" class="search-scope-btn" data-scope="deck">
+                  Deck
+                  <Div class="count">0</Div>
+                </button>
+                <button id="search-scope-all" class="search-scope-btn" data-scope="all">
+                  All
+                  <Div class="count">0</Div>
+                </button>
               </div>
               <div class="search-buttons">
                 <button id="exact-search-btn" class="btn btn-primary">Exact Word</button>
@@ -638,23 +777,52 @@ class WelcomeScreen {
 
     this.updateDifficultyCounts();
 
+    // Add click handler to detect clicks on import option only when it's already selected
+    languageSelect.addEventListener('click', (e) => {
+      const selectedValue = e.target.value;
+      // Only trigger on click if import is already selected (no language pairs case)
+      if (selectedValue === 'import-data' && this.languagePairs.length === 0) {
+        this.triggerImport();
+      }
+    });
+
     languageSelect.addEventListener('change', (e) => {
-      this.selectedLanguagePair = e.target.value;
+      const selectedValue = e.target.value;
+      
+      // Handle import option
+      if (selectedValue === 'import-data') {
+        this.triggerImport();
+        return;
+      }
+      
+      this.selectedLanguagePair = selectedValue;
       startStudyBtn.disabled = !this.selectedLanguagePair;
       // Save selection to localStorage
       if (this.selectedLanguagePair) {
         localStorage.setItem('selectedLanguagePair', this.selectedLanguagePair);
       }
 
+      // Reset deck selector to "All Cards" temporarily to avoid incorrect filtering
+      const deckSelect = this.container.querySelector('#deck-select');
+      if (deckSelect) {
+        deckSelect.value = 'all';
+      }
+      
+      // Update counts with "All Cards" first, then load decks
       this.updateDifficultyCounts(true); // Force sync when language changes
-      this.loadDecks(); // Load decks for new language pair
+      this.updateStats();
+      this.updateTimePeriodCounts();
+      
+      // Load decks for new language pair (will restore appropriate deck selection)
+      this.loadDecks();
     });
 
     // Deck selector event listener
     if (deckSelect) {
       deckSelect.addEventListener('change', (e) => {
-        // Save selection to localStorage
-        localStorage.setItem('selectedDeck', e.target.value);
+        // Save selection to localStorage with language pair specific key
+        const deckKey = `selectedDeck_${this.selectedLanguagePair}`;
+        localStorage.setItem(deckKey, e.target.value);
         
         // Update all counts and UI for selected deck
         this.updateDifficultyCounts();
@@ -669,6 +837,12 @@ class WelcomeScreen {
         this.onStartStudy(this.selectedLanguagePair, reverseDirection.checked, null, selectedDeck);
       }
     });
+
+    // Import file input event listener
+    const importFileInput = this.container.querySelector('#import-file-input');
+    if (importFileInput) {
+      importFileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+    }
 
     // Search functionality
     if (searchBtn) {
@@ -741,6 +915,34 @@ class WelcomeScreen {
     }
   }
 
+  saveSearchConfig() {
+    const config = {
+      searchTarget: this.selectedSearchTarget,
+      searchScope: this.selectedSearchScope,
+      lastSearchTerm: this.lastSearchTerm || ''
+    };
+    localStorage.setItem('searchConfig', JSON.stringify(config));
+  }
+
+  loadSearchConfig() {
+    try {
+      const config = localStorage.getItem('searchConfig');
+      if (config) {
+        const parsedConfig = JSON.parse(config);
+        this.selectedSearchTarget = parsedConfig.searchTarget || 'word';
+        this.selectedSearchScope = parsedConfig.searchScope || 'deck';
+        this.lastSearchTerm = parsedConfig.lastSearchTerm || '';
+        return true;
+      } else {
+        this.selectedSearchTarget = 'word';
+        this.selectedSearchScope = 'deck';
+      }
+    } catch (error) {
+      console.error('Error loading search config:', error);
+    }
+    return false;
+  }
+
   showSearchPanel() {
     const searchPanel = this.container.querySelector('#search-panel');
     const searchInput = this.container.querySelector('#search-input');
@@ -748,28 +950,73 @@ class WelcomeScreen {
     const exactSearchBtn = this.container.querySelector('#exact-search-btn');
     const partialSearchBtn = this.container.querySelector('#partial-search-btn');
     const fuzzySearchBtn = this.container.querySelector('#fuzzy-search-btn');
-    const searchBtn = this.container.querySelector('#search-btn');
+    const searchTargetWord = this.container.querySelector('#search-target-word');
+    const searchTargetTranslation = this.container.querySelector('#search-target-translation');
 
     if (!searchPanel || !searchInput) return;
 
+    // Initialize event listeners array if not already initialized
+    if (!this.searchPanelEventListeners) {
+      this.searchPanelEventListeners = [];
+    }
+
     // Show the panel
     searchPanel.classList.remove('hidden');
+    
+    // Load search configuration
+    this.loadSearchConfig();
+    
+    // Set the appropriate search targets button as active
+    searchTargetWord.classList.remove('active');
+    searchTargetTranslation.classList.remove('active');
+    if (this.selectedSearchTarget === 'word') {
+      searchTargetWord.classList.add('active');
+    } else if (this.selectedSearchTarget === 'translation') {
+      searchTargetTranslation.classList.add('active');
+    } else if (this.selectedSearchTarget === 'both') {
+      searchTargetWord.classList.add('active');
+      searchTargetTranslation.classList.add('active');
+    }
+    
+    // Restore search scope buttons
+    const searchScopeBtns = this.container.querySelectorAll('.search-scope-btn');
+    searchScopeBtns.forEach(btn => {
+      btn.classList.remove('active');
+      if (btn.dataset.scope === this.selectedSearchScope) {
+        btn.classList.add('active');
+      }
+    });
+    
+    // Restore last search term
+    if (this.lastSearchTerm) {
+      searchInput.value = this.lastSearchTerm;
+    }
+    
+    // Focus on search input
+    searchInput.removeAttribute('list');
     searchInput.focus();
     
-    // Initially remove the list attribute to prevent datalist from showing
-    searchInput.removeAttribute('list');
-    
+    // Update search scope counts
+    this.updateSearchScopeCounts();
+
+    // Clear any previous error state
+    searchInput.classList.remove('search-input-error');
+
+    // Close button
+    if (closeBtn) {
+      const closeHandler = () => {
+        this.cleanupSearchPanel();
+      };
+      closeBtn.onclick = closeHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: closeHandler, target: closeBtn });
+    }
     // Update datalist and simulate a click to trigger it naturally
     this.updateSearchHistoryDatalist();
     
     // Simulate a click to trigger the datalist dropdown
     setTimeout(() => {
       searchInput.setAttribute('list', 'search-history');
-      searchInput.click();
-    }, 1000);
-
-    // Store event listeners for cleanup
-    this.searchPanelEventListeners = [];
+    }, 100);
 
     // Close panel when clicking outside (only if search input is empty)
     const closeOnOutsideClick = (e) => {
@@ -824,6 +1071,75 @@ class WelcomeScreen {
       this.searchPanelEventListeners.push({ type: 'click', handler: fuzzySearchHandler, target: fuzzySearchBtn });
     }
 
+    if (searchTargetWord && searchTargetTranslation){
+      const searchTargetWordHandler = () => {
+        if (searchTargetWord.classList.contains('active')) {
+          if (searchTargetTranslation.classList.contains('active')) {
+            searchTargetWord.classList.remove('active');
+            this.selectedSearchTarget = 'translation';
+          }
+        } else {
+          searchTargetWord.classList.add('active');
+          if (!searchTargetTranslation.classList.contains('active')) {
+            this.selectedSearchTarget = 'word';
+          } else {
+            this.selectedSearchTarget = 'both';
+          }
+        }
+        // Save configuration
+        this.saveSearchConfig();
+      };
+      searchTargetWord.onclick = searchTargetWordHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: searchTargetWordHandler, target: searchTargetWord });
+
+      const searchTargetTranslationHandler = () => {
+        if (searchTargetTranslation.classList.contains('active')) {
+          if (searchTargetWord.classList.contains('active')) {
+            searchTargetTranslation.classList.remove('active');
+            this.selectedSearchTarget = 'word';
+          }
+        } else {
+          searchTargetTranslation.classList.add('active');
+          if (!searchTargetWord.classList.contains('active')) {
+            this.selectedSearchTarget = 'translation';
+          } else {
+            this.selectedSearchTarget = 'both';
+          }
+        }
+        // Save configuration
+        this.saveSearchConfig();
+      };
+      searchTargetTranslation.onclick = searchTargetTranslationHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: searchTargetTranslationHandler, target: searchTargetTranslation });
+    }
+
+    // Search scope buttons
+    const scopeBtns = this.container.querySelectorAll('.search-scope-btn');
+    scopeBtns.forEach(btn => {
+      const scopeHandler = () => {
+        // Remove active class from all scope buttons
+        scopeBtns.forEach(b => b.classList.remove('active'));
+        // Add active class to clicked button
+        btn.classList.add('active');
+        
+        // Store the selected scope
+        this.selectedSearchScope = btn.dataset.scope;
+        console.log(`Search scope changed to: ${this.selectedSearchScope}`);
+        // Save configuration
+        this.saveSearchConfig();
+      };
+      btn.onclick = scopeHandler;
+      this.searchPanelEventListeners.push({ type: 'click', handler: scopeHandler, target: btn });
+    });
+
+    // Save search term as user types
+    const inputHandler = () => {
+      this.lastSearchTerm = searchInput.value;
+      this.saveSearchConfig();
+    };
+    searchInput.oninput = inputHandler;
+    this.searchPanelEventListeners.push({ type: 'input', handler: inputHandler, target: searchInput });
+
     // Enter key to search, Escape to close
     const keyHandler = (e) => {
       if (e.key === 'Enter') {
@@ -857,12 +1173,20 @@ class WelcomeScreen {
           listener.target.onkeydown = null;
         }
       });
+      if (!this.cameFromSearch) {
+        this.lastSearchTerm = '';
+        this.saveSearchConfig();
+      }
+      this.searchResults = null;
+      this.deckFilter = null;
       this.searchPanelEventListeners = [];
+      this.selectedSearchScope = 'filtered'; // Default search scope
+      this.selectedSearchTarget = 'word'; // Default search target
+      this.cameFromSearch = false; // Track if user came from search panel
     }
     
     this.hideSearchPanel();
   }
-
   hideSearchPanel() {
     const searchPanel = this.container.querySelector('#search-panel');
     const searchInput = this.container.querySelector('#search-input');
@@ -947,45 +1271,112 @@ class WelcomeScreen {
     }
 
     try {
-      // Get the current difficulty, time, and deck filters
-      const difficultyFilters = this.getDifficultyFilters();
-      const timeFilter = this.getTimeFilter();
-      const selectedDeck = this.getSelectedDeck();
+      // Get the current difficulty, time, and deck filters with null checks
+      const difficultyFilters = this.getDifficultyFilters() || {};
+      const timeFilter = this.getTimeFilter(); // This can be null and that's OK
+      const selectedDeck = this.getSelectedDeck() || 'all';
 
-      // Get filtered words based on current difficulty, time, and deck filters
-      const filteredWords = await dataSyncService.getFilteredCards(this.selectedLanguagePair, difficultyFilters, timeFilter, selectedDeck);
+      // Ensure difficultyFilters is a valid object
+      const safeDifficultyFilters = difficultyFilters && typeof difficultyFilters === 'object' ? difficultyFilters : {};
+
+      // Get cards based on selected search scope
+      let searchBaseCards;
       
-      if (!filteredWords || filteredWords.length === 0) {
-        alert('No words available with current filters. Please adjust your difficulty or time filters.');
+      switch (this.selectedSearchScope) {
+        case 'filtered':
+          // Filtered: Cards with difficulty, time, and deck filters applied
+          searchBaseCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, safeDifficultyFilters, timeFilter, selectedDeck === 'all' ? null : selectedDeck);
+          break;
+        case 'deck':
+          // Deck: All cards in selected deck (no difficulty or time filters)
+          searchBaseCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, null, null, selectedDeck === 'all' ? null : selectedDeck);
+          break;
+        case 'all':
+          // All: All cards in language pair (no filters)
+          searchBaseCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, null, null, null);
+          break;
+        default:
+          // Default to filtered
+          searchBaseCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, safeDifficultyFilters, timeFilter, selectedDeck === 'all' ? null : selectedDeck);
+      }
+      
+      if (!searchBaseCards || searchBaseCards.length === 0) {
+        const scopeName = this.selectedSearchScope.charAt(0).toUpperCase() + this.selectedSearchScope.slice(1);
+        alert(`No words available in ${scopeName} scope. Please try a different scope or adjust your filters.`);
         return;
       }
+
+      console.log(`Searching in ${this.selectedSearchScope} scope with ${searchBaseCards.length} cards`);
 
       let searchResults;
       
       if (searchMode === 'exact') {
-        // Exact word match with word boundaries (case insensitive)
+        // Exact word match with word boundaries (accent-insensitive)
         const searchTermLower = searchTerm.toLowerCase();
         
-        // Create regex to match whole word boundaries
-        const wordRegex = new RegExp(`\\b${searchTermLower}\\b`, 'i');
+        // Create accent-insensitive regex to match whole word boundaries
+        const wordRegex = TextUtils.createAccentInsensitiveRegex(searchTerm);
         
-        searchResults = filteredWords.filter(word => {
-          // Check if search term matches as a whole word in either word or translation
-          const wordMatch = wordRegex.test(word.word);
-          const translationMatch = wordRegex.test(word.translation);
+        searchResults = searchBaseCards.filter(word => {
+          // Check if search term matches based on selected target
+          let wordMatch = false;
+          let translationMatch = false;
+          
+          if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'word') {
+            wordMatch = wordRegex.test(TextUtils.removeAccents(word.word));
+          }
+          if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'translation') {
+            translationMatch = wordRegex.test(TextUtils.removeAccents(word.translation));
+          }
+          
           return wordMatch || translationMatch;
         });
       } else if (searchMode === 'partial') {
-        // Partial match (case insensitive)
-        const searchTermLower = searchTerm.toLowerCase();
-        searchResults = filteredWords.filter(word => 
-          word.word.toLowerCase().includes(searchTermLower) || 
-          word.translation.toLowerCase().includes(searchTermLower)
-        );
+        // Partial match (accent-insensitive)
+        const searchTermNoAccents = TextUtils.createAccentInsensitiveTerm(searchTerm);
+        
+        searchResults = searchBaseCards.filter(word => {
+          // Check if search term matches based on selected target
+          let wordMatch = false;
+          let translationMatch = false;
+          
+          if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'word') {
+            wordMatch = TextUtils.accentInsensitiveMatch(word.word, searchTerm);
+          }
+          if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'translation') {
+            translationMatch = TextUtils.accentInsensitiveMatch(word.translation, searchTerm);
+          }
+          
+          return wordMatch || translationMatch;
+        });
       } else {
-        // Fuzzy search using Fuse.js
+        // Fuzzy search using Fuse.js with accent-insensitive matching
+        const searchTermNoAccents = TextUtils.createAccentInsensitiveTerm(searchTerm);
+        
+        // Create accent-free versions of words for fuzzy matching based on selected target
+        let wordsNoAccents;
+        if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'word') {
+          wordsNoAccents = searchBaseCards.map(word => ({
+            ...word,
+            wordNoAccents: TextUtils.removeAccents(word.word)
+          }));
+        } else if (this.selectedSearchTarget === 'translation') {
+          wordsNoAccents = searchBaseCards.map(word => ({
+            ...word,
+            translationNoAccents: TextUtils.removeAccents(word.translation)
+          }));
+        } else {
+          // Both - include both word and translation
+          wordsNoAccents = searchBaseCards.map(word => ({
+            ...word,
+            wordNoAccents: TextUtils.removeAccents(word.word),
+            translationNoAccents: TextUtils.removeAccents(word.translation)
+          }));
+        }
+        
         const fuseOptions = {
-          keys: ['word', 'translation'],
+          keys: this.selectedSearchTarget === 'both' ? ['wordNoAccents', 'translationNoAccents'] : 
+                this.selectedSearchTarget === 'word' ? ['wordNoAccents'] : ['translationNoAccents'],
           threshold: 0.3, // Lower threshold = more strict matching
           isCaseSensitive: false,
           includeScore: true,
@@ -994,8 +1385,8 @@ class WelcomeScreen {
           minMatchCharLength: 2
         };
 
-        const fuse = new Fuse(filteredWords, fuseOptions);
-        const fuseResults = fuse.search(searchTerm);
+        const fuse = new Fuse(wordsNoAccents, fuseOptions);
+        const fuseResults = fuse.search(searchTermNoAccents);
         searchResults = fuseResults.map(result => result.item);
       }
 
@@ -1009,6 +1400,7 @@ class WelcomeScreen {
       this.saveSearchHistory(searchTerm);
 
       // Clean up and hide search panel
+      this.cameFromSearch = true; // Mark that user came from search
       this.cleanupSearchPanel();
 
       // Start study session with search results
@@ -1034,6 +1426,157 @@ class WelcomeScreen {
     if (overlay) {
       overlay.style.display = 'none';
     }
+  }
+
+  triggerImport() {
+    const fileInput = this.container.querySelector('#import-file-input');
+    if (fileInput) {
+      fileInput.click();
+    }
+    
+    // Reset selector to a valid state after file selection
+    setTimeout(() => {
+      const languageSelect = this.container.querySelector('#language-pair');
+      if (this.languagePairs.length > 0) {
+        languageSelect.value = this.selectedLanguagePair || this.languagePairs[0].id;
+      } else {
+        languageSelect.value = 'import-data';
+      }
+    }, 100);
+  }
+
+  async handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) {
+      return;
+    }
+
+    if (!file.name.endsWith('.json')) {
+      alert('Please select a valid JSON file.');
+      return;
+    }
+
+    try {
+      // Show loading spinner
+      this.showLoadingSpinner();
+
+      // Read and parse the file
+      const fileContent = await this.readFileContent(file);
+      const importData = JSON.parse(fileContent);
+
+      // Validate import data structure
+      if (!dataSyncService.validateImportData(importData)) {
+        throw new Error('Invalid import data format.');
+      }
+
+      // Show confirmation dialog
+      const confirmed = this.confirmImport(importData);
+      if (!confirmed) {
+        return;
+      }
+
+      // Process the import (no language pair restriction for welcome screen)
+      const result = await dataSyncService.processImportData(importData, null);
+
+      // Show results
+      this.showImportResults(result);
+
+      // Switch to imported language pair after user clicks OK
+      setTimeout(async () => {
+        // Refresh language pairs to include newly imported one with its metadata
+        await this.loadLanguagePairs();
+        await this.switchToLanguagePair(importData.languagePair);
+      }, 100);
+
+    } catch (error) {
+      console.error('Error importing data:', error);
+      alert(`Failed to import data: ${error.message}`);
+    } finally {
+      // Hide loading spinner
+      this.hideLoadingSpinner();
+      
+      // Reset file input
+      const fileInput = this.container.querySelector('#import-file-input');
+      fileInput.value = '';
+    }
+  }
+
+  readFileContent(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = (e) => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
+  }
+
+  confirmImport(importData) {
+    const message = `Import data for "${importData.languagePair}"?
+
+This will:
+${this.languagePairs.some(pair => pair.id === importData.languagePair) ? 
+  '• Merge with existing data for this language pair' : 
+  '• Create a new language pair and import data'}
+
+Cards: ${importData.data.cards.length}
+Decks: ${importData.data.decks.length}
+
+Do you want to continue?`;
+
+    return confirm(message);
+  }
+
+  showImportResults(result) {
+    const message = `Import Complete!
+
+Cards:
+  New: ${result.cards.new}
+  Merged: ${result.cards.merged}
+  Skipped: ${result.cards.skipped}
+
+Decks:
+  New: ${result.decks.new}
+  Merged: ${result.decks.merged}
+  Skipped: ${result.decks.skipped}`;
+
+    // Clear saved deck selection to force refresh and show "All Cards"
+    const savedDeckKey = `selectedDeck_${result.languagePair || this.selectedLanguagePair}`;
+    localStorage.removeItem(savedDeckKey);
+    
+    // Use consistent alert pattern like other screens
+    alert(message);
+  }
+
+  async switchToLanguagePair(languagePairId) {
+    // Check if language pair exists in current list
+    const existingPair = this.languagePairs.find(pair => pair.id === languagePairId);
+    
+    if (!existingPair) {
+      // Add new language pair to the list
+      const languagePairStr = String(languagePairId);
+      const [source, target] = languagePairStr.split('-');
+      const newPair = {
+        id: languagePairStr,
+        name: `${source.charAt(0).toUpperCase() + source.slice(1)} - ${target.charAt(0).toUpperCase() + target.slice(1)}`,
+        sourceLang: source.charAt(0).toUpperCase() + source.slice(1),
+        targetLang: target.charAt(0).toUpperCase() + target.slice(1)
+      };
+      
+      // Save the new language pair metadata to IndexedDB
+      await dataSyncService.saveLanguagePairMetadata(newPair);
+      
+      this.languagePairs.push(newPair);
+      
+      // Sort language pairs alphabetically by name
+      this.languagePairs.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    
+    // Update selected language pair
+    this.selectedLanguagePair = languagePairId;
+    localStorage.setItem('selectedLanguagePair', languagePairId);
+    
+    // Re-render the screen to update everything including the dropdown
+    this.render();
   }
 }
 

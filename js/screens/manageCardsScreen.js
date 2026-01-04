@@ -59,17 +59,25 @@ class ManageCardsScreen {
             <button id="add-card-btn" class="btn btn-primary" ${!this.selectedLanguagePair ? 'disabled' : ''}>
               Add New Card
             </button>
+            <button id="export-data-btn" class="btn btn-secondary" ${!this.selectedLanguagePair ? 'disabled' : ''}>
+              Export Data
+            </button>
+            <button id="import-data-btn" class="btn btn-secondary" ${!this.selectedLanguagePair ? 'disabled' : ''}>
+              Import Data
+            </button>
           </div>
           
           <div id="card-list-container">
             <!-- Card list will be rendered here -->
           </div>
 
+          <!-- Hidden file input for import -->
+          <input type="file" id="import-file-input" accept=".json" style="display: none;">
+
           <!-- Modal for adding/editing cards -->
           <div id="card-modal" class="modal">
             <div class="modal-content">
               <span class="close-btn">&times;</span>
-              <h2 id="modal-title">Add New Card</h2>
               <form id="card-form">
                 <div class="form-group">
                   <label for="word-text">Word (Source Language)</label>
@@ -85,15 +93,7 @@ class ManageCardsScreen {
                 </div>
                 <div class="form-group">
                   <label for="example-text">Example (Optional)</label>
-                  <textarea id="example-text" rows="3"></textarea>
-                </div>
-                <div class="form-group">
-                  <label for="difficulty">Difficulty</label>
-                  <select id="difficulty" required>
-                    <option value="1">Easy</option>
-                    <option value="2">Medium</option>
-                    <option value="3">Hard</option>
-                  </select>
+                  <textarea id="example-text" rows="2"></textarea>
                 </div>
                 <div class="form-actions">
                   <button type="button" id="cancel-btn" class="btn btn-secondary">Cancel</button>
@@ -101,6 +101,13 @@ class ManageCardsScreen {
                 </div>
               </form>
             </div>
+          </div>
+        
+        <!-- Loading Spinner Overlay -->
+        <div class="loading-overlay" id="loading-overlay" style="display: none;">
+          <div class="spinner-container">
+            <div class="spinner"></div>
+            <p class="loading-text">Importing data...</p>
           </div>
         </div>
       </div>
@@ -190,6 +197,24 @@ class ManageCardsScreen {
       addCardBtn.addEventListener('click', () => this.showAddCardModal());
     }
 
+    // Export data button
+    const exportDataBtn = this.container.querySelector('#export-data-btn');
+    if (exportDataBtn) {
+      exportDataBtn.addEventListener('click', () => this.handleExportData());
+    }
+
+    // Import data button
+    const importDataBtn = this.container.querySelector('#import-data-btn');
+    if (importDataBtn) {
+      importDataBtn.addEventListener('click', () => this.handleImportData());
+    }
+
+    // Import file input
+    const importFileInput = this.container.querySelector('#import-file-input');
+    if (importFileInput) {
+      importFileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+    }
+
     // Back button
     const backBtn = this.container.querySelector('#back-btn');
     if (backBtn) {
@@ -231,11 +256,9 @@ class ManageCardsScreen {
   showAddCardModal() {
     this.editingCardWord = null;
     const modal = this.container.querySelector('#card-modal');
-    const modalTitle = this.container.querySelector('#modal-title');
     const form = this.container.querySelector('#card-form');
     
-    if (modal && modalTitle && form) {
-      modalTitle.textContent = 'Add New Card';
+    if (modal && form) {
       form.reset();
       modal.style.display = 'block';
     }
@@ -244,17 +267,13 @@ class ManageCardsScreen {
   showEditCardModal(card) {
     this.editingCardWord = card.word;
     const modal = this.container.querySelector('#card-modal');
-    const modalTitle = this.container.querySelector('#modal-title');
     const form = this.container.querySelector('#card-form');
     
-    if (modal && modalTitle && form) {
-      modalTitle.textContent = 'Edit Card';
+    if (modal && form) {
       document.getElementById('word-text').value = card.originalWord || card.word;
       document.getElementById('type-text').value = card.type || '';
       document.getElementById('translation-text').value = card.translation;
       document.getElementById('example-text').value = card.example || '';
-      document.getElementById('range-count').value = card.range_count || '';
-      document.getElementById('frequency').value = card.frequency || '';
       modal.style.display = 'block';
     }
   }
@@ -271,8 +290,6 @@ class ManageCardsScreen {
     const typeInput = document.getElementById('type-text');
     const translationInput = document.getElementById('translation-text');
     const exampleInput = document.getElementById('example-text');
-    const rangeCountInput = document.getElementById('range-count');
-    const frequencyInput = document.getElementById('frequency');
 
     if (!wordInput || !typeInput || !translationInput) return;
 
@@ -280,9 +297,7 @@ class ManageCardsScreen {
       word: wordInput.value.trim(),
       type: typeInput.value.trim(),
       translation: translationInput.value.trim(),
-      example: exampleInput ? exampleInput.value.trim() : '',
-      range_count: rangeCountInput && rangeCountInput.value ? parseInt(rangeCountInput.value) : null,
-      frequency: frequencyInput && frequencyInput.value ? parseInt(frequencyInput.value) : null
+      example: exampleInput ? exampleInput.value.trim() : ''
     };
 
     if (!cardData.word || !cardData.type || !cardData.translation) {
@@ -325,6 +340,302 @@ class ManageCardsScreen {
         alert('Failed to delete card. Please try again.');
       }
     }
+  }
+
+  async handleExportData() {
+    if (!this.selectedLanguagePair) {
+      alert('Please select a language pair first.');
+      return;
+    }
+
+    try {
+      // Show loading indicator
+      const exportBtn = this.container.querySelector('#export-data-btn');
+      const originalText = exportBtn.textContent;
+      exportBtn.textContent = 'Exporting...';
+      exportBtn.disabled = true;
+
+      // Export language pair data using centralized service
+      const exportResult = await dataSyncService.exportLanguagePairData(this.selectedLanguagePair);
+      
+      // Create and download file
+      await this.downloadFile(exportResult.exportData);
+
+      // Show success message
+      alert(`Export successful! Exported ${exportResult.stats.cardsCount} cards and ${exportResult.stats.decksCount} decks.`);
+
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      alert('Failed to export data. Please try again.');
+    } finally {
+      // Reset button
+      const exportBtn = this.container.querySelector('#export-data-btn');
+      exportBtn.textContent = 'Export Data';
+      exportBtn.disabled = false;
+    }
+  }
+
+  
+  async downloadFile(exportData) {
+    const jsonString = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const filename = `flashcard-export-${exportData.languagePair}-${new Date().toISOString().split('T')[0]}.json`;
+
+    // Detect platform and handle file download accordingly
+    if (this.isMobileDevice()) {
+      await this.handleMobileDownload(blob, filename);
+    } else {
+      this.handleDesktopDownload(blob, filename);
+    }
+  }
+
+  isMobileDevice() {
+    // Check for mobile device
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+           ('ontouchstart' in window) ||
+           (navigator.maxTouchPoints > 0);
+  }
+
+  handleDesktopDownload(blob, filename) {
+    // Create download link and trigger download
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  async handleMobileDownload(blob, filename) {
+    // Handle mobile file sharing/downloading
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], filename, { type: 'application/json' })] })) {
+      // Use Web Share API for supported mobile browsers
+      const file = new File([blob], filename, { type: 'application/json' });
+      try {
+        await navigator.share({
+          title: 'Flashcard Data Export',
+          text: `Exported flashcard data for ${this.selectedLanguagePair}`,
+          files: [file]
+        });
+        return;
+      } catch (shareError) {
+        console.warn('Share API failed, falling back to download:', shareError);
+      }
+    }
+
+    // Fallback: Create a temporary link for mobile browsers
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    link.textContent = 'Download Export File';
+    
+    // For mobile, try to open in new tab if direct download doesn't work
+    try {
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Fallback: Show the file content in a new window for manual saving
+      setTimeout(() => {
+        if (!this.wasFileDownloaded()) {
+          this.showFileContentFallback(blob, filename);
+        }
+      }, 1000);
+    } catch (error) {
+      console.warn('Mobile download failed, showing content:', error);
+      this.showFileContentFallback(blob, filename);
+    }
+    
+    URL.revokeObjectURL(url);
+  }
+
+  wasFileDownloaded() {
+    // This is a simple check - in reality, file download detection is complex
+    // For now, we'll assume it worked if no immediate error
+    return true;
+  }
+
+  showFileContentFallback(blob, filename) {
+    // Create a new window with the JSON content for manual copy/save
+    const reader = new FileReader();
+    reader.onload = () => {
+      const content = reader.result;
+      const newWindow = window.open('', '_blank');
+      if (newWindow) {
+        newWindow.document.write(`
+          <html>
+            <head>
+              <title>Flashcard Export - ${filename}</title>
+              <style>
+                body { font-family: monospace; padding: 20px; }
+                pre { background: #f5f5f5; padding: 15px; border-radius: 5px; overflow: auto; }
+                button { margin-top: 10px; padding: 10px 20px; }
+              </style>
+            </head>
+            <body>
+              <h2>Flashcard Export Data</h2>
+              <p>Filename: <strong>${filename}</strong></p>
+              <p>Please copy and save this content as a JSON file:</p>
+              <pre>${content}</pre>
+              <button onclick="copyToClipboard()">Copy to Clipboard</button>
+              <script>
+                function copyToClipboard() {
+                  const text = document.querySelector('pre').textContent;
+                  navigator.clipboard.writeText(text).then(() => {
+                    alert('Content copied to clipboard! You can now save it as ${filename}');
+                  });
+                }
+              </script>
+            </body>
+          </html>
+        `);
+        newWindow.document.close();
+      } else {
+        alert('Unable to open new window. Please check your popup blocker settings.');
+      }
+    };
+    reader.readAsText(blob);
+  }
+
+  async handleImportData() {
+    if (!this.selectedLanguagePair) {
+      alert('Please select a language pair first.');
+      return;
+    }
+
+    // Detect platform and handle file selection accordingly
+    if (this.isMobileDevice()) {
+      await this.handleMobileFileSelection();
+    } else {
+      this.handleDesktopFileSelection();
+    }
+  }
+
+  handleDesktopFileSelection() {
+    const fileInput = this.container.querySelector('#import-file-input');
+    if (fileInput) {
+      fileInput.click();
+    }
+  }
+
+  async handleMobileFileSelection() {
+    // Try Web Share API for file selection on mobile
+    if (navigator.share && navigator.canShare) {
+      try {
+        // For mobile, we'll try to use file picker if available
+        const fileInput = this.container.querySelector('#import-file-input');
+        if (fileInput) {
+          fileInput.click();
+        }
+      } catch (error) {
+        console.warn('Mobile file selection failed:', error);
+        alert('Please select a file using the file picker.');
+      }
+    } else {
+      // Fallback to standard file input
+      this.handleDesktopFileSelection();
+    }
+  }
+
+  async handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.json')) {
+      alert('Please select a valid JSON file.');
+      return;
+    }
+
+    try {
+      // Show loading spinner overlay
+      this.showLoadingSpinner();
+
+      // Read and parse the file
+      const fileContent = await this.readFileContent(file);
+      const importData = JSON.parse(fileContent);
+
+      // Validate import data structure
+      if (!dataSyncService.validateImportData(importData)) {
+        throw new Error('Invalid import data format.');
+      }
+
+      // Check if language pair matches
+      if (importData.languagePair !== this.selectedLanguagePair) {
+        alert(`The file's language pair ${importData.languagePair} does not match current language pair ${this.selectedLanguagePair}, skipping..`);
+        return;
+      }
+
+      // Process the import with language pair restriction
+      const result = await dataSyncService.processImportData(importData, this.selectedLanguagePair);
+
+      // Show results
+      this.showImportResults(result);
+
+      // Refresh the card list
+      await this.loadCards(this.selectedLanguagePair);
+
+    } catch (error) {
+      console.error('Error importing data:', error);
+      alert(`Failed to import data: ${error.message}`);
+    } finally {
+      // Hide loading spinner
+      this.hideLoadingSpinner();
+      
+      // Reset file input
+      const fileInput = this.container.querySelector('#import-file-input');
+      fileInput.value = '';
+    }
+  }
+
+  
+  readFileContent(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = (e) => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
+  }
+
+  
+  showLoadingSpinner() {
+    const overlay = this.container.querySelector('#loading-overlay');
+    if (overlay) {
+      overlay.style.display = 'flex';
+    }
+  }
+
+  hideLoadingSpinner() {
+    const overlay = this.container.querySelector('#loading-overlay');
+    if (overlay) {
+      overlay.style.display = 'none';
+    }
+  }
+
+  showImportResults(result) {
+    const message = `Import Complete!
+
+Cards:
+  New: ${result.cards.new}
+  Merged: ${result.cards.merged}
+  Skipped: ${result.cards.skipped}
+
+Decks:
+  New: ${result.decks.new}
+  Merged: ${result.decks.merged}
+  Skipped: ${result.decks.skipped}`;
+
+    // Clear saved deck selection to force refresh and show "All Cards"
+    const savedDeckKey = `selectedDeck_${this.selectedLanguagePair}`;
+    localStorage.removeItem(savedDeckKey);
+    
+    // Use consistent alert pattern like other screens
+    alert(message);
   }
 }
 
