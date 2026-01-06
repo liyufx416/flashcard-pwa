@@ -1,6 +1,7 @@
 /* Base Styles */
 :root {
   --primary-color: #4F46E5;
+  --primary-color-rgb: 79, 70, 229;
   --primary-light: #818CF8;
   --primary-dark: #372bc2;
   --secondary-color: rgba(255, 255, 255, 0.1);
@@ -9,6 +10,7 @@
   --modal-background:  color-mix(in srgb, color-mix(in srgb, var(--background-start) 60%, var(--background-end)) 80%, white);
   --text-color: white;
   --text-light: rgba(255, 255, 255, 0.7);
+  --text-secondary: rgba(255, 255, 255, 0.6);
   --border-color: rgba(255, 255, 255, 0.3);
   --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -605,6 +607,7 @@ header {
   align-items: center;
   gap: 0.5rem;
   margin: 0.5rem 0;
+  margin-bottom: 1rem;
   padding: 0 0.5rem;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -1445,6 +1448,42 @@ input:checked + .toggle-slider:before {
   font-size: 0.9rem;
   margin-top: 0.5rem;
   font-weight: 500;
+}
+
+.card-notes {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+  font-style: italic;
+  line-height: 1.4;
+  padding: 0.25rem 0.5rem;
+  background-color: rgba(var(--primary-color-rgb), 0.05);
+  border-radius: 0.25rem;
+  border-left: 3px solid var(--primary-color);
+}
+
+.note-item {
+  margin-bottom: 0.25rem;
+}
+
+.note-item:last-child {
+  margin-bottom: 0;
+}
+
+/* List view specific notes styling */
+.cards-table .card-notes {
+  margin-top: 0.25rem;
+  padding: 0.125rem 0.25rem;
+  font-size: 0.75rem;
+  background-color: rgba(var(--primary-color-rgb), 0.03);
+}
+
+.cards-table .note-item {
+  margin-bottom: 0.125rem;
+}
+
+.cards-table .note-item:last-child {
+  margin-bottom: 0;
 }
 
 .example {

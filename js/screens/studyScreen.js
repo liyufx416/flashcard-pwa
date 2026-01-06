@@ -302,6 +302,7 @@ class StudyScreen {
                   </button>
                 </div>
                 ${currentCard.type ? `<div class="card-type">(${currentCard.type})</div>` : ''}
+                ${currentCard.notes && currentCard.notes.length > 0 ? `<div class="card-notes">${currentCard.notes.map(note => `<div class="note-item">${note}</div>`).join('')}</div>` : ''}
                 <div class="hint">Tap to flip</div>
                 ${currentCard.example ? `<div class="text-with-speaker example-container">
                   <p class="example">${currentCard.example}</p>
@@ -404,6 +405,7 @@ class StudyScreen {
                       <td class="front-cell">
                         <span>${frontText}</span>
                         ${card.type ? `<div class="card-type">(${card.type})</div>` : ''}
+                        ${card.notes && card.notes.length > 0 ? `<div class="card-notes">${card.notes.map(note => `<div class="note-item">${note}</div>`).join('')}</div>` : ''}
                       </td>
                       <td class="back-cell">
                         <div class="translation-mask" data-index="${index}">

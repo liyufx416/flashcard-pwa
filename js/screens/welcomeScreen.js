@@ -342,10 +342,17 @@ class WelcomeScreen {
     return deckSelect ? deckSelect.value : 'all';
   }
 
-  async loadDecks() {
+  async loadDecks(forceSync = false) {
     if (!this.selectedLanguagePair) return;
 
     try {
+      // Check for force reload flag
+      const forceReload = localStorage.getItem('forceReload') === 'true';
+      if (forceReload) {
+        forceSync = true;
+        localStorage.setItem('forceReload', 'false');
+      }
+      
       // Ensure data is loaded first
       await dataSyncService.ensureDataLoaded(this.selectedLanguagePair);
       
@@ -410,7 +417,7 @@ class WelcomeScreen {
         }
         
         // Update all counts to reflect the selected deck
-        this.updateDifficultyCounts();
+        this.updateDifficultyCounts(forceSync); // Force sync to get updated deck counts
         this.updateStats();
         this.updateTimePeriodCounts();
       } else if (deckSelector) {
@@ -418,7 +425,7 @@ class WelcomeScreen {
         deckSelector.style.display = 'none';
         
         // Still update counts for "All Cards" (which is the default)
-        this.updateDifficultyCounts();
+        this.updateDifficultyCounts(forceSync); // Force sync to ensure latest data
         this.updateStats();
         this.updateTimePeriodCounts();
       }
@@ -814,7 +821,7 @@ class WelcomeScreen {
       this.updateTimePeriodCounts();
       
       // Load decks for new language pair (will restore appropriate deck selection)
-      this.loadDecks();
+      this.loadDecks(true);
     });
 
     // Deck selector event listener
