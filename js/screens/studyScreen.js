@@ -2,6 +2,7 @@ import dataSyncService from '../services/dataSyncService.js';
 import speechService from '../utils/speechService.js';
 import TextUtils from '../utils/textUtils.js';
 import AppInfoModal from '../utils/appInfoModal.js';
+import SpanishVerbConjugation from '../utils/spanishVerbConjugation.js';
 
 class StudyScreen {
   constructor(container, languagePairId, reverseDirection, onBack, searchResults = null, deckFilter = null) {
@@ -44,6 +45,117 @@ class StudyScreen {
         difficultyButtons.style.gap = '0.5rem';
         console.log('Difficulty buttons arranged vertically - nav buttons visible');
       }
+    }
+  }
+
+  shouldShowConjugationButton(card) {
+    // Show conjugation button for Spanish verbs only
+    return this.languagePairId.startsWith('es-') && card && card.type === 'v';
+  }
+
+  showConjugationScreen() {
+    const currentCard = this.cards[this.currentCardIndex];
+    if (!currentCard || !currentCard.word) return;
+    
+    this.showConjugationModal(currentCard.word);
+  }
+
+  showConjugationModal(verb) {
+    const modal = document.createElement('div');
+    modal.className = 'conjugation-modal';
+    modal.innerHTML = `
+      <div class="conjugation-header">
+        <button class="conjugation-close-btn" onclick="studyScreen.closeConjugationModal()">&times;</button>
+        <h2>Conjugations for: <strong>${verb}</strong></h2>
+      </div>
+      <div class="conjugation-content">
+        <div class="conjugation-controls">
+          <label for="mood-select">Mood:</label>
+          <select id="mood-select" onchange="studyScreen.onMoodChange()">
+            <option value="Indicative">Indicative</option>
+            <option value="Subjunctive">Subjunctive</option>
+            <option value="Imperative">Imperative</option>
+            <option value="Progressive">Progressive</option>
+            <option value="Perfect">Perfect</option>
+          </select>
+        </div>
+        <div class="conjugation-display" id="conjugation-display">
+          <p>Loading conjugations...</p>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Load initial conjugations
+    this.onMoodChange();
+  }
+
+  closeConjugationModal() {
+    const modal = document.querySelector('.conjugation-modal');
+    if (modal) {
+      modal.remove();
+    }
+  }
+
+  onMoodChange() {
+    const moodSelect = document.querySelector('#mood-select');
+    const display = document.querySelector('#conjugation-display');
+    const currentCard = this.cards[this.currentCardIndex];
+    
+    if (!currentCard || !moodSelect || !display) return;
+    
+    const selectedMood = moodSelect.value;
+    const conjugator = new SpanishVerbConjugation();
+    const moodData = conjugator.getAllTenses().find(mood => mood.mood === selectedMood);
+    
+    if (!moodData) {
+      display.innerHTML = '<p>No tenses available for this mood.</p>';
+      return;
+    }
+    
+    try {
+      let html = '<div class="conjugation-result">';
+      
+      // Add mood header
+      html += `<h3>${selectedMood} Mood</h3>`;
+      
+      // Create single table for all tenses
+      html += '<div class="conjugation-table">';
+      
+      // Table header
+      html += '<div class="conjugation-header">';
+      html += '<div class="tense-header">Tense</div>';
+      html += '<div class="conjugation-header">Person</div>';
+      for (let i = 0; i < 6; i++) {
+        html += `<div class="person-header">${i === 0 ? 'Yo' : i === 1 ? 'Tú' : i === 2 ? 'Él/Ella' : i === 3 ? 'Nosotros' : i === 4 ? 'Vosotros' : 'Ellos/Ellas'}</div>`;
+      }
+      html += '</div>';
+      
+      // Add conjugation rows for each tense
+      moodData.tenses.forEach((tense, tenseIndex) => {
+        const result = conjugator.conjugate(currentCard.word, tense.id);
+        
+        if (result.success) {
+          // Tense name row (spans 6 columns)
+          html += '<div class="conjugation-row tense-header-row">';
+          html += `<div class="tense-name-cell">${tense.name}</div>`;
+          
+          result.conjugations.forEach((person, personIndex) => {
+            html += `<div class="form-cell person-form">${person.form || '<em class="empty-form">(empty)</em>'}</div>`;
+          });
+          html += '</div>';
+          
+          // Add separator after every 2 tenses (3rd, 5th, etc.)
+          if ((tenseIndex + 1) % 2 === 1 && tenseIndex < moodData.tenses.length - 1) {
+            html += '<div class="tense-separator"></div>';
+          }
+        }; 
+      });
+      html += '</div>';
+      display.innerHTML = html;
+    } catch (error) {
+      display.innerHTML = `<p class="error-message">Error: ${error.message}</p>`;
     }
   }
 
@@ -195,6 +307,12 @@ class StudyScreen {
             <h1 class="app-title clickable">FlashCard</h1>
           </div>
           <div class="language-pair">${languagePairName}</div>
+          <button id="direction-toggle-btn" class="btn-icon" aria-label="Toggle language direction" title="Toggle language direction">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 4L21 8L0 8"></path>
+              <path d="M6 17L0 13L21 18"></path>
+            </svg>
+          </button>
         </header>
         <div class="screen-content">
           <p>No cards available for this language pair.</p>
@@ -240,6 +358,12 @@ class StudyScreen {
             <h1 class="app-title clickable">FlashCard</h1>
           </div>
           <div class="language-pair">${languagePairName}</div>
+          <button id="direction-toggle-btn" class="btn-icon" aria-label="Toggle language direction" title="Toggle language direction">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 8L21 12L17 16"></path>
+              <path d="M7 16L3 12L7 8"></path>
+            </svg>
+          </button>
         </header>
         
         <div class="screen-content">
@@ -262,6 +386,11 @@ class StudyScreen {
               <div class="card-content">
                 <div class="text-with-speaker">
                   <h2>${frontText}</h2>
+                  ${this.shouldShowConjugationButton(currentCard) ? `<button class="conjugation-btn" onclick="studyScreen.showConjugationScreen()" title="View conjugations">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M9 11H5m0 0h4m-4 4v6m0 0h4m-4 4v6m0 0h14m-7 7v10m0 0h7m-7 7v10"></path>
+                    </svg>
+                  </button>` : ''}
                   <button class="speaker-btn" data-text="${frontText}" data-lang="${this.reverseDirection ? 'en' : this.languagePairId.split('-')[0]}" aria-label="Speak" title="Speak">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -372,6 +501,12 @@ class StudyScreen {
             <h1 class="app-title clickable">FlashCard</h1>
           </div>
           <div class="language-pair">${languagePairName}</div>
+          <button id="direction-toggle-btn" class="btn-icon" aria-label="Toggle language direction" title="Toggle language direction">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 8L21 12L17 16"></path>
+              <path d="M7 16L3 12L7 8"></path>
+            </svg>
+          </button>
         </header>
         <div class="screen-content">
           <div class="progress">
@@ -446,6 +581,7 @@ class StudyScreen {
     const checkTranslationBtn = this.container.querySelector('#check-translation-btn');
     const viewToggleBtn = this.container.querySelector('#view-toggle-btn');
     const translationMasks = this.container.querySelectorAll('.translation-mask');
+    const directionToggleBtn = this.container.querySelector('#direction-toggle-btn');
 
     // Set initial speaker button classes based on ResponsiveVoice availability
     speakerBtns.forEach(btn => {
@@ -614,6 +750,14 @@ class StudyScreen {
           this.setCurrentCard(this.currentCardIndex);
         }
         
+      });
+    }
+
+    // Direction toggle button
+    if (directionToggleBtn) {
+      directionToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleLanguageDirection();
       });
     }
 
@@ -1440,6 +1584,22 @@ class StudyScreen {
       this.showLastCardPrompt();
     } else {
       this.animateCardTransition(this.currentCardIndex+1);
+    }
+  }
+
+  toggleLanguageDirection() {
+    // Toggle the reverse direction flag
+    this.reverseDirection = !this.reverseDirection;
+    
+    // Re-render the current view to update front/back languages
+    // This maintains the current card index and view mode
+    this.render();
+    
+    // If in list view, scroll to current card to maintain position
+    if (this.isListView) {
+      setTimeout(() => {
+        this.scrollToCurrentCard();
+      }, 100);
     }
   }
 }
