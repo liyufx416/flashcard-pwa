@@ -48,7 +48,33 @@ class AppInfoModal {
 
       // Check update button event listener
       if (checkUpdateBtn) {
-        checkUpdateBtn.addEventListener('click', async (e) => {
+        // Long press detection
+        let pressTimer;
+        let isLongPress = false;
+        
+        const startPress = (e) => {
+          isLongPress = false;
+          pressTimer = setTimeout(() => {
+            isLongPress = true;
+            console.log('Long press detected - forcing reload...');
+            
+            // Set force reload flag
+            localStorage.setItem('forceReload', 'true');
+            
+            // Force reload
+            VersionManager.checkVersionAndReload(true);
+          }, 2000); // 2 second long press
+        };
+        
+        const endPress = (e) => {
+          clearTimeout(pressTimer);
+          if (!isLongPress) {
+            // Regular click - handle normally
+            handleRegularClick(e);
+          }
+        };
+        
+        const handleRegularClick = async (e) => {
           e.stopPropagation();
           checkUpdateBtn.textContent = '⟳'; // Spinning refresh icon
           checkUpdateBtn.disabled = true;
@@ -98,7 +124,15 @@ class AppInfoModal {
               checkUpdateBtn.classList.remove('error');
             }, 2000);
           }
-        });
+        };
+        
+        // Add event listeners for long press detection
+        checkUpdateBtn.addEventListener('mousedown', startPress);
+        checkUpdateBtn.addEventListener('mouseup', endPress);
+        checkUpdateBtn.addEventListener('mouseleave', endPress);
+        checkUpdateBtn.addEventListener('touchstart', startPress);
+        checkUpdateBtn.addEventListener('touchend', endPress);
+        checkUpdateBtn.addEventListener('touchcancel', endPress);
       }
 
       const closeModal = () => {

@@ -297,7 +297,8 @@ class ManageCardsScreen {
       word: wordInput.value.trim(),
       type: typeInput.value.trim(),
       translation: translationInput.value.trim(),
-      example: exampleInput ? exampleInput.value.trim() : ''
+      example: exampleInput ? exampleInput.value.trim() : '',
+      notes: [] // Default empty notes array for manually created cards
     };
 
     if (!cardData.word || !cardData.type || !cardData.translation) {

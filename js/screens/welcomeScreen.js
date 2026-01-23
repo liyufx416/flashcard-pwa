@@ -132,9 +132,10 @@ class WelcomeScreen {
     if (!this.selectedLanguagePair) return;
 
     const totalWordsEl = this.container.querySelector('#total-words');
+    const studyingWordsEl = this.container.querySelector('#studying-words');
     const masteredWordsEl = this.container.querySelector('#mastered-words');
 
-    if (!totalWordsEl || !masteredWordsEl) return;
+    if (!totalWordsEl || !studyingWordsEl || !masteredWordsEl) return;
 
     try {
       // Get counts with deck filter
@@ -144,14 +145,21 @@ class WelcomeScreen {
       // Total words is sum of all difficulties
       const totalWords = counts.new + counts.hard + counts.medium + counts.easy;
       
+      // Studying words are Hard + Medium cards viewed in the past week
+      const weekFilter = { mode: 'only', period: 'week' };
+      const weekCounts = await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, weekFilter, selectedDeck);
+      const studyingWords = weekCounts.hard + weekCounts.medium;
+      
       // Mastered words are those marked as easy
       const masteredWords = counts.easy;
       
       totalWordsEl.textContent = totalWords;
+      studyingWordsEl.textContent = studyingWords;
       masteredWordsEl.textContent = masteredWords;
     } catch (error) {
       console.error('Error updating stats:', error);
       totalWordsEl.textContent = '0';
+      studyingWordsEl.textContent = '0';
       masteredWordsEl.textContent = '0';
     }
   }
@@ -342,10 +350,17 @@ class WelcomeScreen {
     return deckSelect ? deckSelect.value : 'all';
   }
 
-  async loadDecks() {
+  async loadDecks(forceSync = false) {
     if (!this.selectedLanguagePair) return;
 
     try {
+      // Check for force reload flag
+      const forceReload = localStorage.getItem('forceReload') === 'true';
+      if (forceReload) {
+        forceSync = true;
+        localStorage.setItem('forceReload', 'false');
+      }
+      
       // Ensure data is loaded first
       await dataSyncService.ensureDataLoaded(this.selectedLanguagePair);
       
@@ -410,7 +425,7 @@ class WelcomeScreen {
         }
         
         // Update all counts to reflect the selected deck
-        this.updateDifficultyCounts();
+        this.updateDifficultyCounts(forceSync); // Force sync to get updated deck counts
         this.updateStats();
         this.updateTimePeriodCounts();
       } else if (deckSelector) {
@@ -418,7 +433,7 @@ class WelcomeScreen {
         deckSelector.style.display = 'none';
         
         // Still update counts for "All Cards" (which is the default)
-        this.updateDifficultyCounts();
+        this.updateDifficultyCounts(forceSync); // Force sync to ensure latest data
         this.updateStats();
         this.updateTimePeriodCounts();
       }
@@ -496,14 +511,18 @@ class WelcomeScreen {
           </div>
           <div class="stats-section">
             <div class="stats-content">
-              <div class="stat-item">
+              <button class="stat-item" id="total-stats-btn" data-action="total">
                 <span class="stat-value" id="total-words">0</span>
                 <span class="stat-label">Total Card</span>
-              </div>
-              <div class="stat-item">
+              </button>
+              <button class="stat-item" id="studying-stats-btn" data-action="studying">
+                <span class="stat-value-studying" id="studying-words">0</span>
+                <span class="stat-label">Studying</span>
+              </button>
+              <button class="stat-item" id="mastered-stats-btn" data-action="mastered">
                 <span class="stat-value-mastered" id="mastered-words">0</span>
                 <span class="stat-label">Mastered</span>
-              </div>
+              </button>
             </div>
           </div>
           <div class="difficulty-filters" role="group" aria-label="Difficulty Filters">
@@ -814,7 +833,7 @@ class WelcomeScreen {
       this.updateTimePeriodCounts();
       
       // Load decks for new language pair (will restore appropriate deck selection)
-      this.loadDecks();
+      this.loadDecks(true);
     });
 
     // Deck selector event listener
@@ -886,6 +905,29 @@ class WelcomeScreen {
       });
     }
 
+    // Add click listeners for stat buttons
+    const totalStatsBtn = this.container.querySelector('#total-stats-btn');
+    const studyingStatsBtn = this.container.querySelector('#studying-stats-btn');
+    const masteredStatsBtn = this.container.querySelector('#mastered-stats-btn');
+
+    if (totalStatsBtn) {
+      totalStatsBtn.addEventListener('click', () => {
+        this.setFiltersForAction('total');
+      });
+    }
+
+    if (studyingStatsBtn) {
+      studyingStatsBtn.addEventListener('click', () => {
+        this.setFiltersForAction('studying');
+      });
+    }
+
+    if (masteredStatsBtn) {
+      masteredStatsBtn.addEventListener('click', () => {
+        this.setFiltersForAction('mastered');
+      });
+    }
+
     // Add responsive layout check
     this.checkResponsiveLayout();
     
@@ -893,6 +935,84 @@ class WelcomeScreen {
     window.addEventListener('resize', () => {
       this.checkResponsiveLayout();
     });
+  }
+
+  setFiltersForAction(action) {
+    switch (action) {
+      case 'total':
+        // Set all difficulty levels and clear time filter
+        this.setDifficultyFilters({ new: true, hard: true, medium: true, easy: true });
+        this.clearTimeFilter();
+        break;
+      case 'studying':
+        // Set Hard and Medium only, time filter to Only Week
+        this.setDifficultyFilters({ new: false, hard: true, medium: true, easy: false });
+        this.setTimeFilter('only', 'week');
+        break;
+      case 'mastered':
+        // Set Easy only and clear time filter
+        this.setDifficultyFilters({ new: false, hard: false, medium: false, easy: true });
+        this.clearTimeFilter();
+        break;
+    }
+  }
+
+  setDifficultyFilters(filters) {
+    // Save to localStorage
+    localStorage.setItem('difficultyFilters', JSON.stringify(filters));
+    
+    // Update UI
+    const filterButtons = this.container.querySelectorAll('.difficulty-filter-btn');
+    filterButtons.forEach(btn => {
+      const key = btn.dataset.filter;
+      if (key && filters.hasOwnProperty(key)) {
+        btn.classList.toggle('active', filters[key]);
+        btn.setAttribute('aria-pressed', String(filters[key]));
+      }
+    });
+    
+    // Update counts
+    this.updateDifficultyCounts();
+  }
+
+  clearTimeFilter() {
+    // Remove time filter from localStorage
+    localStorage.removeItem('timeFilter');
+    
+    // Update UI - deactivate all time period buttons
+    const timePeriodButtons = this.container.querySelectorAll('.time-period-btn');
+    timePeriodButtons.forEach(btn => {
+      btn.classList.remove('active');
+    });
+    
+    // Reset mode to 'only' (default)
+    const timeModeButtons = this.container.querySelectorAll('.time-mode-btn');
+    timeModeButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === 'only');
+    });
+    
+    // Update counts
+    this.updateDifficultyCounts();
+  }
+
+  setTimeFilter(mode, period) {
+    // Save to localStorage
+    localStorage.setItem('timeFilter', JSON.stringify({ mode, period }));
+    
+    // Update UI - set mode buttons
+    const timeModeButtons = this.container.querySelectorAll('.time-mode-btn');
+    timeModeButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+    
+    // Update UI - set period button
+    const timePeriodButtons = this.container.querySelectorAll('.time-period-btn');
+    timePeriodButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.period === period);
+    });
+    
+    // Update counts
+    this.updateDifficultyCounts();
   }
 
   updateSpeechStatus() {

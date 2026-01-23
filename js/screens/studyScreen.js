@@ -2,6 +2,7 @@ import dataSyncService from '../services/dataSyncService.js';
 import speechService from '../utils/speechService.js';
 import TextUtils from '../utils/textUtils.js';
 import AppInfoModal from '../utils/appInfoModal.js';
+import SpanishVerbConjugation from '../utils/spanishVerbConjugation.js';
 
 class StudyScreen {
   constructor(container, languagePairId, reverseDirection, onBack, searchResults = null, deckFilter = null) {
@@ -20,6 +21,9 @@ class StudyScreen {
     this.cardCheckAttempts = new Map(); // Track check attempts per card
     this.cardRecommendations = new Map(); // Track recommendation level per card
     this.isListView = false; // Toggle between card and list view
+    this.isReviewMode = false; // Toggle between study and review mode
+    this.reviewCards = []; // Filtered cards for review mode
+    this.currentReviewIndex = 0; // Current index in review mode
   }
 
   checkResponsiveLayout() {
@@ -44,6 +48,192 @@ class StudyScreen {
         difficultyButtons.style.gap = '0.5rem';
         console.log('Difficulty buttons arranged vertically - nav buttons visible');
       }
+    }
+  }
+
+  shouldShowConjugationButton(card) {
+    // Check feature toggle first
+    const appElement = document.getElementById('app');
+    const conjugationEnabled = appElement ? appElement.getAttribute('data-conjugation-enabled') === 'true' : false;
+    
+    // Show conjugation button for Spanish verbs only if feature is enabled
+    return conjugationEnabled && this.languagePairId.startsWith('es-') && card && card.type === 'v';
+  }
+
+  filterReviewCards() {
+    // Filter out cards marked as "Easy" (difficulty 1) or cards without difficulty level
+    this.reviewCards = this.cards.filter(card => {
+      const difficulty = card.stats && card.stats.difficulty;
+      // Keep cards that have difficulty level and are not Easy (1)
+      return difficulty !== undefined && difficulty !== null && difficulty !== 1;
+    });
+  }
+
+  toggleReviewMode() {
+    this.isReviewMode = !this.isReviewMode;
+    
+    if (this.isReviewMode) {
+      // Enter review mode
+      this.filterReviewCards();
+      this.currentReviewIndex = 0;
+      
+      // If no review cards available, show message and switch back
+      if (this.reviewCards.length === 0) {
+        this.isReviewMode = false;
+        this.showNoReviewCardsMessage();
+        return;
+      }
+    } else {
+      // Exit review mode
+      this.currentReviewIndex = 0;
+    }
+    
+    // Re-render the current view
+    this.render();
+  }
+
+  showNoReviewCardsMessage() {
+    const modal = document.createElement('div');
+    modal.className = 'conjugation-modal';
+    modal.innerHTML = `
+      <div class="conjugation-header">
+        <button class="conjugation-close-btn" onclick="this.closest('.conjugation-modal').remove()">&times;</button>
+        <h2>No Review Cards</h2>
+      </div>
+      <div class="conjugation-content">
+        <p>No cards available for review. Review mode shows cards that are not marked as "Easy" and have a difficulty level.</p>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  getCurrentCard() {
+    if (this.isReviewMode) {
+      return this.reviewCards[this.currentReviewIndex];
+    } else {
+      return this.cards[this.currentCardIndex];
+    }
+  }
+
+  getCurrentCardNumber() {
+    if (this.isReviewMode) {
+      return this.currentReviewIndex + 1;
+    } else {
+      return this.currentCardIndex + 1;
+    }
+  }
+
+  getTotalCardCount() {
+    if (this.isReviewMode) {
+      return this.reviewCards.length;
+    } else {
+      return this.cards.length;
+    }
+  }
+
+  showConjugationScreen() {
+    const currentCard = this.getCurrentCard();
+    if (!currentCard || !currentCard.word) return;
+    
+    this.showConjugationModal(currentCard.word);
+  }
+
+  showConjugationModal(verb) {
+    const modal = document.createElement('div');
+    modal.className = 'conjugation-modal';
+    modal.innerHTML = `
+      <div class="conjugation-header">
+        <button class="conjugation-close-btn" onclick="studyScreen.closeConjugationModal()">&times;</button>
+        <h2>Conjugations for: <strong>${verb}</strong></h2>
+      </div>
+      <div class="conjugation-content">
+        <div class="conjugation-controls">
+          <label for="mood-select">Mood:</label>
+          <select id="mood-select" onchange="studyScreen.onMoodChange()">
+            <option value="Indicative">Indicative</option>
+            <option value="Subjunctive">Subjunctive</option>
+            <option value="Imperative">Imperative</option>
+            <option value="Progressive">Progressive</option>
+            <option value="Perfect">Perfect</option>
+          </select>
+        </div>
+        <div class="conjugation-display" id="conjugation-display">
+          <p>Loading conjugations...</p>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Load initial conjugations
+    this.onMoodChange();
+  }
+
+  closeConjugationModal() {
+    const modal = document.querySelector('.conjugation-modal');
+    if (modal) {
+      modal.remove();
+    }
+  }
+
+  onMoodChange() {
+    const moodSelect = document.querySelector('#mood-select');
+    const display = document.querySelector('#conjugation-display');
+    const currentCard = this.getCurrentCard();
+    
+    if (!currentCard || !moodSelect || !display) return;
+    
+    const selectedMood = moodSelect.value;
+    const conjugator = new SpanishVerbConjugation();
+    const moodData = conjugator.getAllTenses().find(mood => mood.mood === selectedMood);
+    
+    if (!moodData) {
+      display.innerHTML = '<p>No tenses available for this mood.</p>';
+      return;
+    }
+    
+    try {
+      let html = '<div class="conjugation-result">';
+      
+      // Add mood header
+      html += `<h3>${selectedMood} Mood</h3>`;
+      
+      // Create single table for all tenses
+      html += '<div class="conjugation-table">';
+      
+      // Table header
+      html += '<div class="conjugation-header">';
+      html += '<div class="tense-header">Tense</div>';
+      html += '<div class="conjugation-header">Person</div>';
+      for (let i = 0; i < 6; i++) {
+        html += `<div class="person-header">${i === 0 ? 'Yo' : i === 1 ? 'Tú' : i === 2 ? 'Él/Ella' : i === 3 ? 'Nosotros' : i === 4 ? 'Vosotros' : 'Ellos/Ellas'}</div>`;
+      }
+      html += '</div>';
+      
+      // Add conjugation rows for each tense
+      moodData.tenses.forEach((tense, tenseIndex) => {
+        const result = conjugator.conjugate(currentCard.word, tense.id);
+        
+        if (result.success) {
+          // Tense name row (spans 6 columns)
+          html += '<div class="conjugation-row tense-header-row">';
+          html += `<div class="tense-name-cell">${tense.name}</div>`;
+          
+          result.conjugations.forEach((person, personIndex) => {
+            html += `<div class="form-cell person-form">${person.form || '<em class="empty-form">(empty)</em>'}</div>`;
+          });
+          html += '</div>';
+          
+          // Add separator after every 2 tenses (3rd, 5th, etc.)
+          if ((tenseIndex + 1) % 2 === 1 && tenseIndex < moodData.tenses.length - 1) {
+            html += '<div class="tense-separator"></div>';
+          }
+        }; 
+      });
+      html += '</div>';
+      display.innerHTML = html;
+    } catch (error) {
+      display.innerHTML = `<p class="error-message">Error: ${error.message}</p>`;
     }
   }
 
@@ -195,6 +385,12 @@ class StudyScreen {
             <h1 class="app-title clickable">FlashCard</h1>
           </div>
           <div class="language-pair">${languagePairName}</div>
+          <button id="direction-toggle-btn" class="btn-icon" aria-label="Toggle language direction" title="Toggle language direction">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 4L21 8L0 8"></path>
+              <path d="M6 17L0 13L21 18"></path>
+            </svg>
+          </button>
         </header>
         <div class="screen-content">
           <p>No cards available for this language pair.</p>
@@ -220,7 +416,7 @@ class StudyScreen {
   }
 
   renderCardView(languagePairName) {
-    const currentCard = this.cards[this.currentCardIndex];
+    const currentCard = this.getCurrentCard();
     
     // Determine front and back content based on direction
     const displayWord = currentCard.originalWord || currentCard.word;
@@ -240,21 +436,46 @@ class StudyScreen {
             <h1 class="app-title clickable">FlashCard</h1>
           </div>
           <div class="language-pair">${languagePairName}</div>
+          <button id="direction-toggle-btn" class="btn-icon" aria-label="Toggle language direction" title="Toggle language direction">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 8L21 12L17 16"></path>
+              <path d="M7 16L3 12L7 8"></path>
+            </svg>
+          </button>
         </header>
         
         <div class="screen-content">
           <div class="progress">
-            <span>Card ${this.currentCardIndex + 1} of ${this.cards.length}</span>
+            <div class="progress-left">
+              <span class="progress-text">${this.isReviewMode ? 'Review card' : 'Card'} ${this.getCurrentCardNumber()} of ${this.getTotalCardCount()}</span>
+              <button id="mode-toggle-btn" class="btn-icon" aria-label="Toggle ${this.isReviewMode ? 'study' : 'review'} mode" title="Switch to ${this.isReviewMode ? 'study' : 'review'} mode">
+                ${this.isReviewMode ? `
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                    <line x1="3" y1="14" x2="21" y2="14"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                    <line x1="3" y1="22" x2="21" y2="22"></line>
+                  </svg>
+                ` : `
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="M21 21l-4.35-4.35"></path>
+                    <polyline points="8 9 9 14 15 8"></polyline>
+                  </svg>
+                `}
+              </button>
+            </div>
             <button id="view-toggle-btn" class="btn-icon" aria-label="Switch to list view" title="Switch to list view">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="8" y1="6" x2="21" y2="6"></line>
-                <line x1="8" y1="12" x2="21" y2="12"></line>
-                <line x1="8" y1="18" x2="21" y2="18"></line>
-                <line x1="3" y1="6" x2="3.01" y2="6"></line>
-                <line x1="3" y1="12" x2="3.01" y2="12"></line>
-                <line x1="3" y1="18" x2="3.01" y2="18"></line>
-              </svg>
-            </button>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="8" y1="6" x2="21" y2="6"></line>
+                  <line x1="8" y1="12" x2="21" y2="12"></line>
+                  <line x1="8" y1="18" x2="21" y2="18"></line>
+                  <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                  <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                  <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                </svg>
+              </button>
           </div>
           
           <div class="flashcard" id="flashcard" ${this.isFlipped ? 'flipped' : ''}>
@@ -262,6 +483,11 @@ class StudyScreen {
               <div class="card-content">
                 <div class="text-with-speaker">
                   <h2>${frontText}</h2>
+                  ${this.shouldShowConjugationButton(currentCard) ? `<button class="conjugation-btn" onclick="studyScreen.showConjugationScreen()" title="View conjugations">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M9 11H5m0 0h4m-4 4v6m0 0h4m-4 4v6m0 0h14m-7 7v10m0 0h7m-7 7v10"></path>
+                    </svg>
+                  </button>` : ''}
                   <button class="speaker-btn" data-text="${frontText}" data-lang="${this.reverseDirection ? 'en' : this.languagePairId.split('-')[0]}" aria-label="Speak" title="Speak">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -302,6 +528,7 @@ class StudyScreen {
                   </button>
                 </div>
                 ${currentCard.type ? `<div class="card-type">(${currentCard.type})</div>` : ''}
+                ${currentCard.notes && currentCard.notes.length > 0 ? `<div class="card-notes">${currentCard.notes.map(note => `<div class="note-item">${note}</div>`).join('')}</div>` : ''}
                 <div class="hint">Tap to flip</div>
                 ${currentCard.example ? `<div class="text-with-speaker example-container">
                   <p class="example">${currentCard.example}</p>
@@ -371,10 +598,35 @@ class StudyScreen {
             <h1 class="app-title clickable">FlashCard</h1>
           </div>
           <div class="language-pair">${languagePairName}</div>
+          <button id="direction-toggle-btn" class="btn-icon" aria-label="Toggle language direction" title="Toggle language direction">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 8L21 12L17 16"></path>
+              <path d="M7 16L3 12L7 8"></path>
+            </svg>
+          </button>
         </header>
         <div class="screen-content">
           <div class="progress">
-            <span>Card ${this.currentCardIndex + 1} of ${this.cards.length}</span>
+            <div class="progress-left">
+              <span class="progress-text">${this.isReviewMode ? 'Review card' : 'Card'} ${this.getCurrentCardNumber()} of ${this.getTotalCardCount()}</span>
+              <button id="mode-toggle-btn" class="btn-icon" aria-label="Toggle ${this.isReviewMode ? 'study' : 'review'} mode" title="Switch to ${this.isReviewMode ? 'study' : 'review'} mode">
+                ${this.isReviewMode ? `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="3" y1="6" x2="21" y2="6"></line>
+                  <line x1="3" y1="10" x2="21" y2="10"></line>
+                  <line x1="3" y1="14" x2="21" y2="14"></line>
+                  <line x1="3" y1="18" x2="21" y2="18"></line>
+                  <line x1="3" y1="22" x2="21" y2="22"></line>
+                </svg>
+                ` : `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <path d="M21 21l-4.35-4.35"></path>
+                  <polyline points="8 9 9 14 15 8"></polyline>
+                </svg>
+              `}
+              </button>
+            </div>
             <button id="view-toggle-btn" class="btn-icon" aria-label="Switch to card view" title="Switch to card view">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="4" width="18" height="16" rx="2" ry="2"></rect>
@@ -394,16 +646,18 @@ class StudyScreen {
                 </tr>
               </thead>
               <tbody>
-                ${this.cards.map((card, index) => {
+                ${(this.isReviewMode ? this.reviewCards : this.cards).map((card, index) => {
                   const displayWord = card.originalWord || card.word;
                   const frontText = this.reverseDirection ? card.translation : displayWord;
                   const backText = this.reverseDirection ? displayWord : card.translation;
+                  const currentIndex = this.isReviewMode ? this.currentReviewIndex : this.currentCardIndex;
                   
                   return `
-                    <tr data-index="${index}" class="card-row ${index === this.currentCardIndex ? 'current-row' : ''}">
+                    <tr data-index="${index}" class="card-row ${index === currentIndex ? 'current-row' : ''}">
                       <td class="front-cell">
                         <span>${frontText}</span>
                         ${card.type ? `<div class="card-type">(${card.type})</div>` : ''}
+                        ${card.notes && card.notes.length > 0 ? `<div class="card-notes">${card.notes.map(note => `<div class="note-item">${note}</div>`).join('')}</div>` : ''}
                       </td>
                       <td class="back-cell">
                         <div class="translation-mask" data-index="${index}">
@@ -444,6 +698,7 @@ class StudyScreen {
     const checkTranslationBtn = this.container.querySelector('#check-translation-btn');
     const viewToggleBtn = this.container.querySelector('#view-toggle-btn');
     const translationMasks = this.container.querySelectorAll('.translation-mask');
+    const directionToggleBtn = this.container.querySelector('#direction-toggle-btn');
 
     // Set initial speaker button classes based on ResponsiveVoice availability
     speakerBtns.forEach(btn => {
@@ -615,6 +870,29 @@ class StudyScreen {
       });
     }
 
+    // Direction toggle button
+    if (directionToggleBtn) {
+      directionToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleLanguageDirection();
+      });
+    }
+
+    // Progress text click handler for toggling review mode
+    const progressText = this.container.querySelector('.progress-text');
+    if (progressText) {
+      progressText.classList.remove('clickable');
+    }
+
+    // Mode toggle button click handler
+    const modeToggleBtn = this.container.querySelector('#mode-toggle-btn');
+    if (modeToggleBtn) {
+      modeToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleReviewMode();
+      });
+    }
+
     // Translation mask click handlers for list view
     translationMasks.forEach(mask => {
       mask.addEventListener('click', e => {
@@ -626,12 +904,19 @@ class StudyScreen {
           // Toggle between masked and revealed states
           this.revealTranslation(cardIndex, revealedText.style.display === 'none');
         }
-        if (this.currentCardIndex !== cardIndex) {
-          this.setCurrentCard(cardIndex);
+        if (this.isReviewMode) {
+          if (this.currentReviewIndex !== cardIndex) {
+            this.currentReviewIndex = cardIndex;
+            this.setCurrentCard(cardIndex);
+          }
+        } else {
+          if (this.currentCardIndex !== cardIndex) {
+            this.setCurrentCard(cardIndex);
+          }
         }
       });
     });
-    
+
     // Card row click handlers for tracking last clicked card
     const cardRows = this.container.querySelectorAll('.card-row');
     cardRows.forEach(row => {
@@ -639,8 +924,15 @@ class StudyScreen {
         // Don't track clicks on difficulty buttons or translation masks
         if (!e.target.closest('.difficulty-btn') && !e.target.closest('.translation-mask')) {
           const cardIndex = parseInt(row.dataset.index);
-          if (cardIndex !== this.currentCardIndex) {
-            this.setCurrentCard(cardIndex);
+          if (this.isReviewMode) {
+            if (cardIndex !== this.currentReviewIndex) {
+              this.currentReviewIndex = cardIndex;
+              this.setCurrentCard(cardIndex);
+            }
+          } else {
+            if (cardIndex !== this.currentCardIndex) {
+              this.setCurrentCard(cardIndex);
+            }
           }
         }
       });
@@ -649,7 +941,11 @@ class StudyScreen {
       row.addEventListener('dblclick', (e) => {
         e.stopPropagation();
         const cardIndex = parseInt(row.dataset.index);
-        this.currentCardIndex = cardIndex;
+        if (this.isReviewMode) {
+          this.currentReviewIndex = cardIndex;
+        } else {
+          this.currentCardIndex = cardIndex;
+        }
         this.isListView = false;
         this.render();
       });
@@ -678,13 +974,30 @@ class StudyScreen {
     
     if (!translationInput || !checkBtn) return;
 
+    // Check if button is currently showing feedback (has any feedback class)
+    if (checkBtn.classList.contains('perfect') || checkBtn.classList.contains('partial') || checkBtn.classList.contains('nomatch')) {
+      // Clear the input field
+      translationInput.value = '';
+      
+      // Reset the button to original state
+      this.resetCheckButton(isList);
+      
+      // Remove difficulty recommendation
+      this.removeDifficultyRecommendation(isList);
+      
+      // Focus back to input for easy re-entry
+      translationInput.focus();
+      
+      return;
+    }
+
     const userInput = translationInput.value.trim();
     if (!userInput) {
       this.resetCheckButton(isList);
       return;
     }
 
-    const currentCard = this.cards[this.currentCardIndex];
+    const currentCard = this.getCurrentCard();
     const correctTranslation = this.reverseDirection ? currentCard.word : currentCard.translation;
     
     // Second comparison: without accents
@@ -893,7 +1206,7 @@ class StudyScreen {
   }
 
   getDifficultyRecommendation(similarity) {
-    const currentCard = this.cards[this.currentCardIndex];
+    const currentCard = this.getCurrentCard();
     const cardId = `${currentCard.word}-${currentCard.translation}`;
     
     // Get current attempt count for this card
@@ -964,9 +1277,23 @@ class StudyScreen {
     }
   }
 
+  removeDifficultyRecommendation(isList = false) {
+    let containerToUse = this.container;
+
+    // For list view, find difficulty buttons in the action row
+    if (isList) {
+      containerToUse = this.container.querySelector('.action-row');
+    }
+
+    const difficultyBtns = containerToUse.querySelectorAll('.difficulty-btn');
+    
+    // Remove any existing recommendations
+    difficultyBtns.forEach(btn => btn.classList.remove('recommendation'));
+  }
+
   async handleDifficulty(difficulty) {
     // Store the difficulty and last_reviewed timestamp in IndexedDB
-    const currentCard = this.cards[this.currentCardIndex];
+    const currentCard = this.getCurrentCard();
     
     try {
       currentCard.stats.difficulty = difficulty;
@@ -1093,7 +1420,7 @@ class StudyScreen {
   updateProgressText() {
     const progressElement = this.container.querySelector('.progress span');
     if (progressElement) {
-      progressElement.textContent = `Card ${this.currentCardIndex + 1} of ${this.cards.length}`;
+      progressElement.textContent = `${this.isReviewMode ? 'Review' : 'Card'} ${this.getCurrentCardNumber()} of ${this.getTotalCardCount()}`;
     }
   }
 
@@ -1404,8 +1731,12 @@ class StudyScreen {
     // Wait for flip-out animation to complete
     await new Promise(resolve => setTimeout(resolve, 300));
     
-    // Update current card index
-    this.currentCardIndex = nextCard;
+    // Update current card index based on mode
+    if (this.isReviewMode) {
+      this.currentReviewIndex = nextCard;
+    } else {
+      this.currentCardIndex = nextCard;
+    }
     
     // Update progress text
     this.updateProgressText();
@@ -1426,18 +1757,50 @@ class StudyScreen {
 
   // Update the handleNext and handlePrevious methods to use the new animation
   handlePrevious() {
-    if (this.currentCardIndex === 0) {
-      this.showFirstCardPrompt();
+    if (this.isReviewMode) {
+      if (this.currentReviewIndex === 0) {
+        this.showFirstCardPrompt();
+      } else {
+        this.animateCardTransition(this.currentReviewIndex-1);
+      }
     } else {
-      this.animateCardTransition(this.currentCardIndex-1);
+      if (this.currentCardIndex === 0) {
+        this.showFirstCardPrompt();
+      } else {
+        this.animateCardTransition(this.currentCardIndex-1);
+      }
     }
   }
 
   handleNext() {
-    if (this.currentCardIndex === this.cards.length - 1) {
-      this.showLastCardPrompt();
+    if (this.isReviewMode) {
+      if (this.currentReviewIndex === this.reviewCards.length - 1) {
+        this.showLastCardPrompt();
+      } else {
+        this.animateCardTransition(this.currentReviewIndex+1);
+      }
     } else {
-      this.animateCardTransition(this.currentCardIndex+1);
+      if (this.currentCardIndex === this.cards.length - 1) {
+        this.showLastCardPrompt();
+      } else {
+        this.animateCardTransition(this.currentCardIndex+1);
+      }
+    }
+  }
+
+  toggleLanguageDirection() {
+    // Toggle the reverse direction flag
+    this.reverseDirection = !this.reverseDirection;
+    
+    // Re-render the current view to update front/back languages
+    // This maintains the current card index and view mode
+    this.render();
+    
+    // If in list view, scroll to current card to maintain position
+    if (this.isListView) {
+      setTimeout(() => {
+        this.scrollToCurrentCard();
+      }, 100);
     }
   }
 }
