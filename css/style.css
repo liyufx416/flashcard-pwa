@@ -2179,6 +2179,10 @@ button:not(:disabled):hover {
   color: var(--text-light);
 }
 
+.progress-left {
+  display: flex;
+}
+
 .progress-bar {
   height: 8px;
   background-color: #e0e0e0;
@@ -2200,6 +2204,7 @@ button:not(:disabled):hover {
   text-align: center;
   color: #666;
   font-size: 0.9rem;
+  align-content: center;
 }
 
 /* Add Card Form */
