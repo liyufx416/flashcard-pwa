@@ -399,23 +399,14 @@ class ManageCardsScreen {
   }
 
   async goToWelcomeScreen() {
-    // Import WelcomeScreen
-    const { default: WelcomeScreen } = await import('./welcomeScreen.js');
-    
-    // Create and show welcome screen with search term pre-populated
-    const welcomeScreen = new WelcomeScreen(this.container);
-    welcomeScreen.show();
-    
-    // If we have a search term, show search panel with it pre-populated
-    if (this.searchTerm) {
-      setTimeout(() => {
-        welcomeScreen.showSearchPanel();
-        const searchInput = welcomeScreen.container.querySelector('#search-input');
-        if (searchInput) {
-          searchInput.value = this.searchTerm;
-          searchInput.focus();
-        }
-      }, 100);
+    // Use the onBack callback to properly return to welcome screen
+    if (this.onBack) {
+      // If we have a search term, we need to show search panel after returning
+      if (this.searchTerm) {
+        // Store the search term temporarily for the welcome screen to use
+        sessionStorage.setItem('pendingSearchTerm', this.searchTerm);
+      }
+      this.onBack();
     }
   }
 
@@ -732,6 +723,10 @@ Decks:
     
     // Use consistent alert pattern like other screens
     alert(message);
+  }
+
+  async show() {
+    await this.loadLanguagePairs();
   }
 }
 

@@ -1594,16 +1594,24 @@ class WelcomeScreen {
     // Create and show the manage cards screen with add word modal
     const manageCardsScreen = new ManageCardsScreen(
       this.container,
-      this.selectedLanguagePair,
       () => {
-        // When user goes back, show welcome screen again
-        this.show();
+        // Use unified go-back mechanism
+        if (window.app) {
+          window.app.goBackToWelcome();
+        }
       }
     );
+    
+    // Set the selected language pair
+    manageCardsScreen.selectedLanguagePair = this.selectedLanguagePair;
+    
+    // First show the manage cards screen
+    await manageCardsScreen.show();
     
     // Pre-populate the word field based on search target
     const isWordTarget = this.selectedSearchTarget === 'word' || this.selectedSearchTarget === 'both';
     
+    // Then show the add word modal with pre-populated data
     manageCardsScreen.showAddWordModal({
       word: isWordTarget ? searchTerm : '',
       translation: !isWordTarget ? searchTerm : ''
