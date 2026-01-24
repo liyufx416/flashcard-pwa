@@ -37,6 +37,13 @@ class FlashcardApp {
       sessionStorage.removeItem('pendingSearchTerm'); // Clear it after using
     }
     
+    // Check if we're returning from search results
+    const returnFromSearch = sessionStorage.getItem('returnFromSearch');
+    if (returnFromSearch === 'true') {
+      showSearchPanel = true;
+      sessionStorage.removeItem('returnFromSearch'); // Clear it after using
+    }
+    
     // Check if we're returning from another screen and restore language pair
     const returnLanguagePair = sessionStorage.getItem('returnLanguagePair');
     if (returnLanguagePair) {
@@ -101,7 +108,7 @@ class FlashcardApp {
       this.container,
       languagePairId,
       reverseDirection,
-      () => this.goBackToWelcome(),
+      () => this.goBackToWelcome(searchResults !== null),
       searchResults,
       deckFilter
     );
@@ -118,11 +125,16 @@ class FlashcardApp {
   }
 
   // Unified go-back method to prevent callback stack growth
-  goBackToWelcome() {
+  goBackToWelcome(fromSearchResults = false) {
     // Store any necessary state before refresh
     const currentLanguagePair = this.currentLanguagePair;
     if (currentLanguagePair) {
       sessionStorage.setItem('returnLanguagePair', currentLanguagePair);
+    }
+    
+    // If returning from search results, set flag to show search panel
+    if (fromSearchResults) {
+      sessionStorage.setItem('returnFromSearch', 'true');
     }
     
     // Refresh page to return to welcome screen
