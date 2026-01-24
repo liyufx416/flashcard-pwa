@@ -8,6 +8,8 @@ class ManageCardsScreen {
     this.cards = [];
     this.selectedLanguagePair = localStorage.getItem('selectedLanguagePair');
     this.editingCardWord = null;
+    this.isAddFromSearch = false; // Track if called from search flow
+    this.searchTerm = ''; // Store search term for cancel behavior
   }
 
   async loadLanguagePairs() {
@@ -264,6 +266,45 @@ class ManageCardsScreen {
     }
   }
 
+  showAddWordModal(prePopulatedData = {}) {
+    this.editingCardWord = null;
+    
+    // Track if this is called from search flow (has pre-populated data)
+    this.isAddFromSearch = Object.keys(prePopulatedData).length > 0;
+    
+    // Store search term for cancel behavior
+    if (prePopulatedData.word) {
+      this.searchTerm = prePopulatedData.word;
+    } else if (prePopulatedData.translation) {
+      this.searchTerm = prePopulatedData.translation;
+    } else {
+      this.searchTerm = '';
+    }
+    
+    const modal = this.container.querySelector('#card-modal');
+    const form = this.container.querySelector('#card-form');
+    
+    if (modal && form) {
+      form.reset();
+      
+      // Pre-populate fields if provided
+      if (prePopulatedData.word) {
+        document.getElementById('word-text').value = prePopulatedData.word;
+      }
+      if (prePopulatedData.translation) {
+        document.getElementById('translation-text').value = prePopulatedData.translation;
+      }
+      if (prePopulatedData.type) {
+        document.getElementById('type-text').value = prePopulatedData.type;
+      }
+      if (prePopulatedData.example) {
+        document.getElementById('example-text').value = prePopulatedData.example;
+      }
+      
+      modal.style.display = 'block';
+    }
+  }
+
   showEditCardModal(card) {
     this.editingCardWord = card.word;
     const modal = this.container.querySelector('#card-modal');
@@ -282,6 +323,11 @@ class ManageCardsScreen {
     const modal = this.container.querySelector('#card-modal');
     if (modal) {
       modal.style.display = 'none';
+    }
+    
+    // If this was called from search flow and user is canceling, go back to welcome screen
+    if (this.isAddFromSearch) {
+      this.goToWelcomeScreen();
     }
   }
 
@@ -310,17 +356,66 @@ class ManageCardsScreen {
       // Save to IndexedDB
       await dataSyncService.saveCard(this.selectedLanguagePair, cardData);
       
-      // Reload cards from DB
-      await this.loadCards(this.selectedLanguagePair);
-      
+      // Close modal
       this.closeModal();
       
-      // Show success message
-      alert(`Card ${this.editingCardWord ? 'updated' : 'added'} successfully!`);
+      // Handle different behaviors based on whether this was called from search
+      if (this.isAddFromSearch) {
+        // Go to study screen with the newly added word
+        await this.goToStudyScreenWithNewWord(cardData);
+      } else {
+        // Normal flow: reload cards and show success message
+        await this.loadCards(this.selectedLanguagePair);
+        alert(`Card ${this.editingCardWord ? 'updated' : 'added'} successfully!`);
+      }
       
     } catch (error) {
       console.error('Error saving card:', error);
       alert('Failed to save card. Please try again.');
+    }
+  }
+
+  async goToStudyScreenWithNewWord(cardData) {
+    // Import StudyScreen
+    const { default: StudyScreen } = await import('./studyScreen.js');
+    
+    // Create search results with just the new card
+    const searchResults = [cardData];
+    
+    // Create study screen with the new card
+    const studyScreen = new StudyScreen(
+      this.container,
+      this.selectedLanguagePair,
+      false, // reverseDirection
+      () => {
+        // When user goes back from study screen, return to welcome screen
+        this.goToWelcomeScreen();
+      },
+      searchResults
+    );
+    
+    // Show study screen
+    studyScreen.show();
+  }
+
+  async goToWelcomeScreen() {
+    // Import WelcomeScreen
+    const { default: WelcomeScreen } = await import('./welcomeScreen.js');
+    
+    // Create and show welcome screen with search term pre-populated
+    const welcomeScreen = new WelcomeScreen(this.container);
+    welcomeScreen.show();
+    
+    // If we have a search term, show search panel with it pre-populated
+    if (this.searchTerm) {
+      setTimeout(() => {
+        welcomeScreen.showSearchPanel();
+        const searchInput = welcomeScreen.container.querySelector('#search-input');
+        if (searchInput) {
+          searchInput.value = this.searchTerm;
+          searchInput.focus();
+        }
+      }, 100);
     }
   }
 
