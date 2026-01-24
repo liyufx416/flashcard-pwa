@@ -356,15 +356,13 @@ class ManageCardsScreen {
       // Save to IndexedDB
       await dataSyncService.saveCard(this.selectedLanguagePair, cardData);
       
-      // Close modal
-      this.closeModal();
-      
       // Handle different behaviors based on whether this was called from search
       if (this.isAddFromSearch) {
         // Go to study screen with the newly added word
         await this.goToStudyScreenWithNewWord(cardData);
       } else {
         // Normal flow: reload cards and show success message
+      this.closeModal();
         await this.loadCards(this.selectedLanguagePair);
         alert(`Card ${this.editingCardWord ? 'updated' : 'added'} successfully!`);
       }
@@ -376,26 +374,15 @@ class ManageCardsScreen {
   }
 
   async goToStudyScreenWithNewWord(cardData) {
-    // Import StudyScreen
-    const { default: StudyScreen } = await import('./studyScreen.js');
-    
     // Create search results with just the new card
     const searchResults = [cardData];
     
-    // Create study screen with the new card
-    const studyScreen = new StudyScreen(
-      this.container,
-      this.selectedLanguagePair,
-      false, // reverseDirection
-      () => {
-        // When user goes back from study screen, return to welcome screen
-        this.goToWelcomeScreen();
-      },
-      searchResults
-    );
-    
-    // Show study screen
-    studyScreen.show();
+    // Use the app's startStudy method to properly show the study screen
+    if (window.app) {
+      window.app.startStudy(this.selectedLanguagePair, false, searchResults);
+    } else {
+      console.error('App instance not found');
+    }
   }
 
   async goToWelcomeScreen() {
