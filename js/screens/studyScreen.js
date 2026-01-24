@@ -3,6 +3,7 @@ import speechService from '../utils/speechService.js';
 import TextUtils from '../utils/textUtils.js';
 import AppInfoModal from '../utils/appInfoModal.js';
 import SpanishVerbConjugation from '../utils/spanishVerbConjugation.js';
+import cardDatabase from '../db/cardDatabase.js';
 
 class StudyScreen {
   constructor(container, languagePairId, reverseDirection, onBack, searchResults = null, deckFilter = null) {
@@ -128,6 +129,20 @@ class StudyScreen {
       return this.reviewCards.length;
     } else {
       return this.cards.length;
+    }
+  }
+
+  async recordCardShown(card) {
+    if (!card) return;
+    
+    try {
+      await cardDatabase.updateCardLastShown(
+        this.languagePairId,
+        card.word,
+        card.type
+      );
+    } catch (error) {
+      console.error('Error recording card shown time:', error);
     }
   }
 
@@ -339,9 +354,22 @@ class StudyScreen {
         this.cards = await dataSyncService.getFilteredCards(this.languagePairId, effectiveFilters, timeFilter, this.deckFilter);
       }
 
+      // Sort cards by lastShown in reverse order (never shown first, then most recently shown last)
+      this.cards.sort((a, b) => {
+        const aLastShown = a.stats?.lastShown;
+        const bLastShown = b.stats?.lastShown;
+        
+        // Never shown cards come first
+        if (!aLastShown && !bLastShown) return 0;
+        if (!aLastShown) return -1; // a comes first (never shown)
+        if (!bLastShown) return 1;  // b comes first (never shown)
+        
+        // Both have lastShown - sort in reverse chronological order (most recent last)
+        return new Date(aLastShown) - new Date(bLastShown);
+      });
+
       this.currentCardIndex = 0;
       this.isFlipped = false;
-      this.shuffleCards();
       this.render();
     } catch (error) {
       console.error('Error loading data:', error);
@@ -417,6 +445,9 @@ class StudyScreen {
 
   renderCardView(languagePairName) {
     const currentCard = this.getCurrentCard();
+    
+    // Record when this card is shown
+    this.recordCardShown(currentCard);
     
     // Determine front and back content based on direction
     const displayWord = currentCard.originalWord || currentCard.word;
@@ -586,6 +617,10 @@ class StudyScreen {
   }
 
   renderListView(languagePairName) {
+    // Record when the current card is shown in list view
+    const currentCard = this.getCurrentCard();
+    this.recordCardShown(currentCard);
+    
     this.container.innerHTML = `
       <div class="study-container">
         <header class="app-header">
@@ -924,6 +959,12 @@ class StudyScreen {
         // Don't track clicks on difficulty buttons or translation masks
         if (!e.target.closest('.difficulty-btn') && !e.target.closest('.translation-mask')) {
           const cardIndex = parseInt(row.dataset.index);
+          const cards = this.isReviewMode ? this.reviewCards : this.cards;
+          const clickedCard = cards[cardIndex];
+          
+          // Record when this card is shown
+          this.recordCardShown(clickedCard);
+          
           if (this.isReviewMode) {
             if (cardIndex !== this.currentReviewIndex) {
               this.currentReviewIndex = cardIndex;
@@ -1672,8 +1713,8 @@ class StudyScreen {
     // Replace card content with prompt
     cardContent.innerHTML = `
       <div class="prompt-card">
-        <h3>You have completed reviewing the cards</h3>
-        <p>Do you wish to move to the first card of the pile?</p>
+        <h3>You have completed the deck</h3>
+        <p>Do you wish to go back to the start and review the cards that are marked as "Hard" or "Medium"?</p>
         <div class="prompt-buttons">
           <button class="btn btn-primary" id="prompt-yes">Yes</button>
           <button class="btn btn-secondary-white-bg" id="prompt-no">No</button>
@@ -1689,6 +1730,23 @@ class StudyScreen {
     
     yesBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      // Put current card to the beginning of the pile and enter review mode
+      if (!this.isReviewMode) {
+        // Move current card to beginning
+        const currentCard = this.cards[this.currentCardIndex];
+        this.cards.splice(this.currentCardIndex, 1);
+        this.cards.unshift(currentCard);
+        this.currentCardIndex = 0;
+        
+        // Enter review mode
+        this.isReviewMode = true;
+        this.filterReviewCards();
+        this.currentReviewIndex = 0;
+      } else {
+        // Already in review mode, just go to beginning
+        this.currentReviewIndex = 0;
+      }
+      
       this.animateCardTransition(0);
       this.disableNavigationButtons(false);
     });

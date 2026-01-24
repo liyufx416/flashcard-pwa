@@ -93,7 +93,8 @@ class CardDatabase {
         stats: {
           difficulty: cardData.stats?.difficulty || cardData.difficulty || null,
           lastReviewed: cardData.stats?.lastReviewed || cardData.lastReviewed || null,
-          reviewCount: cardData.stats?.reviewCount || cardData.reviewCount || 0
+          reviewCount: cardData.stats?.reviewCount || cardData.reviewCount || 0,
+          lastShown: cardData.stats?.lastShown || null
         }
       };
       
@@ -146,6 +147,20 @@ class CardDatabase {
     return this.saveCard(languagePair, card);
   }
 
+  async updateCardLastShown(languagePair, word, type) {
+    if (!this.db) await this.init();
+    
+    const card = await this.getCard(languagePair, word.toLowerCase(), type);
+    if (!card) {
+      throw new Error(`Card not found: ${languagePair} - ${word} (${type})`);
+    }
+    
+    card.stats = card.stats || {};
+    card.stats.lastShown = new Date().toISOString();
+    
+    return this.saveCard(languagePair, card);
+  }
+
   async mergeCardData(languagePair, jsonCard) {
     if (!this.db) await this.init();
     
@@ -165,7 +180,8 @@ class CardDatabase {
         stats: existingCard.stats || {
           difficulty: null,
           lastReviewed: null,
-          reviewCount: 0
+          reviewCount: 0,
+          lastShown: null
         }
       };
       return this.saveCard(languagePair, mergedCard);

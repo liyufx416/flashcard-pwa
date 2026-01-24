@@ -310,7 +310,8 @@ class DataSyncService {
         if (card.stats && 
             card.stats.difficulty === null && 
             card.stats.lastReviewed === null && 
-            card.stats.reviewCount === 0) {
+            card.stats.reviewCount === 0 &&
+            card.stats.lastShown === null) {
           // Remove stats object if it's empty/default
           const { stats, ...cardWithoutStats } = card;
           return cardWithoutStats;
@@ -542,7 +543,8 @@ class DataSyncService {
     const mergedStats = {
       difficulty: null,
       lastReviewed: null,
-      reviewCount: 0
+      reviewCount: 0,
+      lastShown: null
     };
 
     // Determine which stats to use based on lastReviewed
@@ -554,11 +556,13 @@ class DataSyncService {
       mergedStats.difficulty = importCard.stats?.difficulty || null;
       mergedStats.lastReviewed = importCard.stats?.lastReviewed || null;
       mergedStats.reviewCount = (existingCard.stats?.reviewCount || 0) + (importCard.stats?.reviewCount || 0);
+      mergedStats.lastShown = importCard.stats?.lastShown || existingCard.stats?.lastShown || null;
     } else {
       // Use existing stats as primary
       mergedStats.difficulty = existingCard.stats?.difficulty || null;
       mergedStats.lastReviewed = existingCard.stats?.lastReviewed || null;
       mergedStats.reviewCount = (existingCard.stats?.reviewCount || 0) + (importCard.stats?.reviewCount || 0);
+      mergedStats.lastShown = existingCard.stats?.lastShown || importCard.stats?.lastShown || null;
     }
 
     // Update the existing card with merged data
