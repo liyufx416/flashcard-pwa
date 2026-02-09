@@ -7,6 +7,15 @@ class DataSyncService {
   constructor() {
     this.syncInProgress = new Map();
     this.checksumCache = new Map(); // Cache checksums to avoid redundant calculations
+    cardDB.initIfNeeded();
+  }
+
+  async getStoredDeckChecksum(languagePairId) {
+    return localStorage.getItem(`deckChecksum_${languagePairId}`);
+  }
+
+  async setStoredDeckChecksum(languagePairId, checksum) {
+    localStorage.setItem(`deckChecksum_${languagePairId}`, checksum);
   }
 
   async getStoredChecksum(languagePairId) {
@@ -172,7 +181,14 @@ class DataSyncService {
         return cards;
       }
     } else {
-        return cards;
+      // Cards exist, but we still need to check for deck updates
+      try {
+        await this.loadAndMergeDecks(languagePairId, false);
+      } catch (error) {
+        // Deck loading failed, but that's okay - cards are already loaded
+        console.log('Deck update check failed, but cards are already loaded:', error);
+      }
+      return cards;
     }
   }
 
@@ -184,17 +200,17 @@ class DataSyncService {
   }
 
   async getDifficultyCounts(languagePairId, timeFilter = null, deckFilter = null) {
-    await this.ensureDataLoaded(languagePairId);
+//    await this.ensureDataLoaded(languagePairId);
     return await cardDB.getDifficultyCounts(languagePairId, timeFilter, deckFilter);
   }
 
   async getFilteredCards(languagePairId, difficultyFilters, timeFilter = null, deckFilter = null) {
-    await this.ensureDataLoaded(languagePairId);
+//    await this.ensureDataLoaded(languagePairId);
     return await cardDB.getFilteredCards(languagePairId, difficultyFilters, timeFilter, deckFilter);
   }
 
   async getAllWords(languagePairId) {
-    await this.ensureDataLoaded(languagePairId);
+//    await this.ensureDataLoaded(languagePairId);
     return await cardDB.getAllCards(languagePairId);
   }
 
@@ -294,7 +310,8 @@ class DataSyncService {
         if (card.stats && 
             card.stats.difficulty === null && 
             card.stats.lastReviewed === null && 
-            card.stats.reviewCount === 0) {
+            card.stats.reviewCount === 0 &&
+            card.stats.lastShown === null) {
           // Remove stats object if it's empty/default
           const { stats, ...cardWithoutStats } = card;
           return cardWithoutStats;
@@ -323,6 +340,9 @@ class DataSyncService {
 
   async loadAndMergeDecks(languagePairId, forceSync = false) {
     try {
+      // Get stored checksum for deck file
+      const storedDeckChecksum = await this.getStoredDeckChecksum(languagePairId);
+      
       // Try to load deck data
       const deckResponse = await fetch(`/data/${languagePairId}.decks.json`, {
         cache: forceSync ? "reload" : "default"
@@ -333,8 +353,22 @@ class DataSyncService {
         return;
       }
       
-      const deckData = await deckResponse.json();
+      // Calculate checksum of the deck data
+      const deckText = await deckResponse.text();
+      const deckChecksum = await calculateMD5(deckText);
+      
+      // Check if we need to reload the deck data
+      if (!forceSync && storedDeckChecksum === deckChecksum) {
+        console.log(`No deck changes detected for ${languagePairId}`);
+        return;
+      }
+      
+      // Parse the deck data
+      const deckData = JSON.parse(deckText);
       console.log(`Loading deck data for ${languagePairId}: ${deckData.decks?.length || 0} decks`);
+      
+      // Store the new checksum
+      await this.setStoredDeckChecksum(languagePairId, deckChecksum);
       
       // Process each deck
       for (const deck of deckData.decks || []) {
@@ -360,6 +394,7 @@ class DataSyncService {
                 ...deckCard,
                 rank: deckCard.rank || null,
                 example: deckCard.example || '',
+                notes: deckCard.notes || [],
                 range_count: deckCard.range_count || null,
                 frequency: deckCard.frequency || null,
                 stats: {
@@ -371,7 +406,6 @@ class DataSyncService {
               console.log(`Added new card from deck: ${deckCard.word} (${deckCard.type})`);
             } else {
               // Card exists, keep original data (deck data doesn't override)
-              console.log(`Card already exists, keeping original: ${deckCard.word} (${deckCard.type})`);
             }
           }
         }
@@ -487,6 +521,7 @@ class DataSyncService {
       type: cardData.type,
       translation: cardData.translation,
       example: cardData.example || '',
+      notes: cardData.notes || [],
       range_count: cardData.range_count || null,
       frequency: cardData.frequency || null,
       rank: cardData.rank !== undefined ? cardData.rank : null,
@@ -501,11 +536,15 @@ class DataSyncService {
   }
 
   async mergeCardData(existingCard, importCard, languagePair) {
+    // Merge notes arrays - avoid duplicates
+    const mergedNotes = this.mergeNotes(existingCard.notes || [], importCard.notes || []);
+    
     // Merge stats data
     const mergedStats = {
       difficulty: null,
       lastReviewed: null,
-      reviewCount: 0
+      reviewCount: 0,
+      lastShown: null
     };
 
     // Determine which stats to use based on lastReviewed
@@ -517,11 +556,13 @@ class DataSyncService {
       mergedStats.difficulty = importCard.stats?.difficulty || null;
       mergedStats.lastReviewed = importCard.stats?.lastReviewed || null;
       mergedStats.reviewCount = (existingCard.stats?.reviewCount || 0) + (importCard.stats?.reviewCount || 0);
+      mergedStats.lastShown = importCard.stats?.lastShown || existingCard.stats?.lastShown || null;
     } else {
       // Use existing stats as primary
       mergedStats.difficulty = existingCard.stats?.difficulty || null;
       mergedStats.lastReviewed = existingCard.stats?.lastReviewed || null;
       mergedStats.reviewCount = (existingCard.stats?.reviewCount || 0) + (importCard.stats?.reviewCount || 0);
+      mergedStats.lastShown = existingCard.stats?.lastShown || importCard.stats?.lastShown || null;
     }
 
     // Update the existing card with merged data
@@ -529,6 +570,7 @@ class DataSyncService {
       ...existingCard,
       translation: importCard.translation || existingCard.translation,
       example: importCard.example || existingCard.example,
+      notes: mergedNotes,
       range_count: importCard.range_count || existingCard.range_count,
       frequency: importCard.frequency || existingCard.frequency,
       rank: importCard.rank !== undefined ? importCard.rank : existingCard.rank,
@@ -536,6 +578,29 @@ class DataSyncService {
     };
 
     await this.saveCard(languagePair, updatedCard);
+  }
+
+  mergeNotes(existingNotes, importNotes) {
+    if (!Array.isArray(existingNotes)) existingNotes = [];
+    if (!Array.isArray(importNotes)) importNotes = [];
+    
+    const existingNotesSet = new Set(existingNotes);
+    const mergedNotes = [...existingNotes];
+    
+    for (const note of importNotes) {
+      if (!existingNotesSet.has(note)) {
+        mergedNotes.push(note);
+        existingNotesSet.add(note);
+      }
+    }
+    
+    return mergedNotes;
+  }
+
+  async getCardsByWordOnly(languagePair, word) {
+    // Get all cards and filter by word only
+    const allCards = await this.getAllWords(languagePair);
+    return allCards.filter(card => card.word.toLowerCase() === word.toLowerCase());
   }
 
   async saveImportDeck(deckData, languagePair) {
@@ -610,10 +675,30 @@ class DataSyncService {
       return;
     }
     
-    // Both are card-based - merge card lists
+    // Both are card-based - merge card lists with enhanced logic
     const existingCardKeys = new Set((existingDeck.cards || []).map(card => `${card.word}-${card.type}`));
     const importCards = importDeck.cards || [];
-    const newCards = importCards.filter(card => !existingCardKeys.has(`${card.word}-${card.type}`));
+    const newCards = [];
+    
+    for (const importCard of importCards) {
+      const cardKey = `${importCard.word}-${importCard.type}`;
+      
+      if (!existingCardKeys.has(cardKey)) {
+        // Card doesn't exist with exact word-type match
+        // Check for word-only matches
+        const wordOnlyMatches = await this.getCardsByWordOnly(languagePair, importCard.word);
+        
+        if (wordOnlyMatches.length === 0) {
+          // No word-only matches either, add the card
+          newCards.push(importCard);
+        } else {
+          // Word-only matches found, log and skip
+          const existingTypes = wordOnlyMatches.map(card => card.type).join(', ');
+          console.log(`Skipping card from deck "${importDeck.deckName}": word "${importCard.word}" with type "${importCard.type}" already exists with type(s): ${existingTypes}`);
+        }
+      }
+      // If card exists with exact match, it's already handled by the existing deck
+    }
     
     const updatedDeck = {
       ...existingDeck,

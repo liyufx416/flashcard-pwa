@@ -8,6 +8,8 @@ class ManageCardsScreen {
     this.cards = [];
     this.selectedLanguagePair = localStorage.getItem('selectedLanguagePair');
     this.editingCardWord = null;
+    this.isAddFromSearch = false; // Track if called from search flow
+    this.searchTerm = ''; // Store search term for cancel behavior
   }
 
   async loadLanguagePairs() {
@@ -264,6 +266,45 @@ class ManageCardsScreen {
     }
   }
 
+  showAddWordModal(prePopulatedData = {}) {
+    this.editingCardWord = null;
+    
+    // Track if this is called from search flow (has pre-populated data)
+    this.isAddFromSearch = Object.keys(prePopulatedData).length > 0;
+    
+    // Store search term for cancel behavior
+    if (prePopulatedData.word) {
+      this.searchTerm = prePopulatedData.word;
+    } else if (prePopulatedData.translation) {
+      this.searchTerm = prePopulatedData.translation;
+    } else {
+      this.searchTerm = '';
+    }
+    
+    const modal = this.container.querySelector('#card-modal');
+    const form = this.container.querySelector('#card-form');
+    
+    if (modal && form) {
+      form.reset();
+      
+      // Pre-populate fields if provided
+      if (prePopulatedData.word) {
+        document.getElementById('word-text').value = prePopulatedData.word;
+      }
+      if (prePopulatedData.translation) {
+        document.getElementById('translation-text').value = prePopulatedData.translation;
+      }
+      if (prePopulatedData.type) {
+        document.getElementById('type-text').value = prePopulatedData.type;
+      }
+      if (prePopulatedData.example) {
+        document.getElementById('example-text').value = prePopulatedData.example;
+      }
+      
+      modal.style.display = 'block';
+    }
+  }
+
   showEditCardModal(card) {
     this.editingCardWord = card.word;
     const modal = this.container.querySelector('#card-modal');
@@ -283,6 +324,11 @@ class ManageCardsScreen {
     if (modal) {
       modal.style.display = 'none';
     }
+    
+    // If this was called from search flow and user is canceling, go back to welcome screen
+    if (this.isAddFromSearch) {
+      this.goToWelcomeScreen();
+    }
   }
 
   async handleSaveCard() {
@@ -297,7 +343,8 @@ class ManageCardsScreen {
       word: wordInput.value.trim(),
       type: typeInput.value.trim(),
       translation: translationInput.value.trim(),
-      example: exampleInput ? exampleInput.value.trim() : ''
+      example: exampleInput ? exampleInput.value.trim() : '',
+      notes: [] // Default empty notes array for manually created cards
     };
 
     if (!cardData.word || !cardData.type || !cardData.translation) {
@@ -309,17 +356,44 @@ class ManageCardsScreen {
       // Save to IndexedDB
       await dataSyncService.saveCard(this.selectedLanguagePair, cardData);
       
-      // Reload cards from DB
-      await this.loadCards(this.selectedLanguagePair);
-      
+      // Handle different behaviors based on whether this was called from search
+      if (this.isAddFromSearch) {
+        // Go to study screen with the newly added word
+        await this.goToStudyScreenWithNewWord(cardData);
+      } else {
+        // Normal flow: reload cards and show success message
       this.closeModal();
-      
-      // Show success message
-      alert(`Card ${this.editingCardWord ? 'updated' : 'added'} successfully!`);
+        await this.loadCards(this.selectedLanguagePair);
+        alert(`Card ${this.editingCardWord ? 'updated' : 'added'} successfully!`);
+      }
       
     } catch (error) {
       console.error('Error saving card:', error);
       alert('Failed to save card. Please try again.');
+    }
+  }
+
+  async goToStudyScreenWithNewWord(cardData) {
+    // Create search results with just the new card
+    const searchResults = [cardData];
+    
+    // Use the app's startStudy method to properly show the study screen
+    if (window.app) {
+      window.app.startStudy(this.selectedLanguagePair, false, searchResults);
+    } else {
+      console.error('App instance not found');
+    }
+  }
+
+  async goToWelcomeScreen() {
+    // Use the onBack callback to properly return to welcome screen
+    if (this.onBack) {
+      // If we have a search term, we need to show search panel after returning
+      if (this.searchTerm) {
+        // Store the search term temporarily for the welcome screen to use
+        sessionStorage.setItem('pendingSearchTerm', this.searchTerm);
+      }
+      this.onBack();
     }
   }
 
@@ -636,6 +710,10 @@ Decks:
     
     // Use consistent alert pattern like other screens
     alert(message);
+  }
+
+  async show() {
+    await this.loadLanguagePairs();
   }
 }
 

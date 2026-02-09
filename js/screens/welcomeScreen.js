@@ -132,9 +132,10 @@ class WelcomeScreen {
     if (!this.selectedLanguagePair) return;
 
     const totalWordsEl = this.container.querySelector('#total-words');
+    const studyingWordsEl = this.container.querySelector('#studying-words');
     const masteredWordsEl = this.container.querySelector('#mastered-words');
 
-    if (!totalWordsEl || !masteredWordsEl) return;
+    if (!totalWordsEl || !studyingWordsEl || !masteredWordsEl) return;
 
     try {
       // Get counts with deck filter
@@ -144,14 +145,21 @@ class WelcomeScreen {
       // Total words is sum of all difficulties
       const totalWords = counts.new + counts.hard + counts.medium + counts.easy;
       
+      // Studying words are Hard + Medium cards viewed in the past week
+      const weekFilter = { mode: 'only', period: 'week' };
+      const weekCounts = await dataSyncService.getDifficultyCounts(this.selectedLanguagePair, weekFilter, selectedDeck);
+      const studyingWords = weekCounts.hard + weekCounts.medium;
+      
       // Mastered words are those marked as easy
       const masteredWords = counts.easy;
       
       totalWordsEl.textContent = totalWords;
+      studyingWordsEl.textContent = studyingWords;
       masteredWordsEl.textContent = masteredWords;
     } catch (error) {
       console.error('Error updating stats:', error);
       totalWordsEl.textContent = '0';
+      studyingWordsEl.textContent = '0';
       masteredWordsEl.textContent = '0';
     }
   }
@@ -342,10 +350,17 @@ class WelcomeScreen {
     return deckSelect ? deckSelect.value : 'all';
   }
 
-  async loadDecks() {
+  async loadDecks(forceSync = false) {
     if (!this.selectedLanguagePair) return;
 
     try {
+      // Check for force reload flag
+      const forceReload = localStorage.getItem('forceReload') === 'true';
+      if (forceReload) {
+        forceSync = true;
+        localStorage.setItem('forceReload', 'false');
+      }
+      
       // Ensure data is loaded first
       await dataSyncService.ensureDataLoaded(this.selectedLanguagePair);
       
@@ -410,7 +425,7 @@ class WelcomeScreen {
         }
         
         // Update all counts to reflect the selected deck
-        this.updateDifficultyCounts();
+        this.updateDifficultyCounts(forceSync); // Force sync to get updated deck counts
         this.updateStats();
         this.updateTimePeriodCounts();
       } else if (deckSelector) {
@@ -418,7 +433,7 @@ class WelcomeScreen {
         deckSelector.style.display = 'none';
         
         // Still update counts for "All Cards" (which is the default)
-        this.updateDifficultyCounts();
+        this.updateDifficultyCounts(forceSync); // Force sync to ensure latest data
         this.updateStats();
         this.updateTimePeriodCounts();
       }
@@ -496,14 +511,18 @@ class WelcomeScreen {
           </div>
           <div class="stats-section">
             <div class="stats-content">
-              <div class="stat-item">
+              <button class="stat-item" id="total-stats-btn" data-action="total">
                 <span class="stat-value" id="total-words">0</span>
                 <span class="stat-label">Total Card</span>
-              </div>
-              <div class="stat-item">
+              </button>
+              <button class="stat-item" id="studying-stats-btn" data-action="studying">
+                <span class="stat-value-studying" id="studying-words">0</span>
+                <span class="stat-label">Studying</span>
+              </button>
+              <button class="stat-item" id="mastered-stats-btn" data-action="mastered">
                 <span class="stat-value-mastered" id="mastered-words">0</span>
                 <span class="stat-label">Mastered</span>
-              </div>
+              </button>
             </div>
           </div>
           <div class="difficulty-filters" role="group" aria-label="Difficulty Filters">
@@ -814,7 +833,7 @@ class WelcomeScreen {
       this.updateTimePeriodCounts();
       
       // Load decks for new language pair (will restore appropriate deck selection)
-      this.loadDecks();
+      this.loadDecks(true);
     });
 
     // Deck selector event listener
@@ -886,6 +905,29 @@ class WelcomeScreen {
       });
     }
 
+    // Add click listeners for stat buttons
+    const totalStatsBtn = this.container.querySelector('#total-stats-btn');
+    const studyingStatsBtn = this.container.querySelector('#studying-stats-btn');
+    const masteredStatsBtn = this.container.querySelector('#mastered-stats-btn');
+
+    if (totalStatsBtn) {
+      totalStatsBtn.addEventListener('click', () => {
+        this.setFiltersForAction('total');
+      });
+    }
+
+    if (studyingStatsBtn) {
+      studyingStatsBtn.addEventListener('click', () => {
+        this.setFiltersForAction('studying');
+      });
+    }
+
+    if (masteredStatsBtn) {
+      masteredStatsBtn.addEventListener('click', () => {
+        this.setFiltersForAction('mastered');
+      });
+    }
+
     // Add responsive layout check
     this.checkResponsiveLayout();
     
@@ -893,6 +935,84 @@ class WelcomeScreen {
     window.addEventListener('resize', () => {
       this.checkResponsiveLayout();
     });
+  }
+
+  setFiltersForAction(action) {
+    switch (action) {
+      case 'total':
+        // Set all difficulty levels and clear time filter
+        this.setDifficultyFilters({ new: true, hard: true, medium: true, easy: true });
+        this.clearTimeFilter();
+        break;
+      case 'studying':
+        // Set Hard and Medium only, time filter to Only Week
+        this.setDifficultyFilters({ new: false, hard: true, medium: true, easy: false });
+        this.setTimeFilter('only', 'week');
+        break;
+      case 'mastered':
+        // Set Easy only and clear time filter
+        this.setDifficultyFilters({ new: false, hard: false, medium: false, easy: true });
+        this.clearTimeFilter();
+        break;
+    }
+  }
+
+  setDifficultyFilters(filters) {
+    // Save to localStorage
+    localStorage.setItem('difficultyFilters', JSON.stringify(filters));
+    
+    // Update UI
+    const filterButtons = this.container.querySelectorAll('.difficulty-filter-btn');
+    filterButtons.forEach(btn => {
+      const key = btn.dataset.filter;
+      if (key && filters.hasOwnProperty(key)) {
+        btn.classList.toggle('active', filters[key]);
+        btn.setAttribute('aria-pressed', String(filters[key]));
+      }
+    });
+    
+    // Update counts
+    this.updateDifficultyCounts();
+  }
+
+  clearTimeFilter() {
+    // Remove time filter from localStorage
+    localStorage.removeItem('timeFilter');
+    
+    // Update UI - deactivate all time period buttons
+    const timePeriodButtons = this.container.querySelectorAll('.time-period-btn');
+    timePeriodButtons.forEach(btn => {
+      btn.classList.remove('active');
+    });
+    
+    // Reset mode to 'only' (default)
+    const timeModeButtons = this.container.querySelectorAll('.time-mode-btn');
+    timeModeButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === 'only');
+    });
+    
+    // Update counts
+    this.updateDifficultyCounts();
+  }
+
+  setTimeFilter(mode, period) {
+    // Save to localStorage
+    localStorage.setItem('timeFilter', JSON.stringify({ mode, period }));
+    
+    // Update UI - set mode buttons
+    const timeModeButtons = this.container.querySelectorAll('.time-mode-btn');
+    timeModeButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+    
+    // Update UI - set period button
+    const timePeriodButtons = this.container.querySelectorAll('.time-period-btn');
+    timePeriodButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.period === period);
+    });
+    
+    // Update counts
+    this.updateDifficultyCounts();
   }
 
   updateSpeechStatus() {
@@ -1252,6 +1372,9 @@ class WelcomeScreen {
     const searchInput = this.container.querySelector('#search-input');
     const searchTerm = searchInput.value.trim();
     
+    // Save search term to history
+    this.saveSearchHistory(searchTerm);
+    
     if (!searchTerm) {
       // Focus on search input and add animated highlight
       searchInput.focus();
@@ -1279,139 +1402,220 @@ class WelcomeScreen {
       // Ensure difficultyFilters is a valid object
       const safeDifficultyFilters = difficultyFilters && typeof difficultyFilters === 'object' ? difficultyFilters : {};
 
-      // Get cards based on selected search scope
-      let searchBaseCards;
-      
-      switch (this.selectedSearchScope) {
-        case 'filtered':
-          // Filtered: Cards with difficulty, time, and deck filters applied
-          searchBaseCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, safeDifficultyFilters, timeFilter, selectedDeck === 'all' ? null : selectedDeck);
-          break;
-        case 'deck':
-          // Deck: All cards in selected deck (no difficulty or time filters)
-          searchBaseCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, null, null, selectedDeck === 'all' ? null : selectedDeck);
-          break;
-        case 'all':
-          // All: All cards in language pair (no filters)
-          searchBaseCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, null, null, null);
-          break;
-        default:
-          // Default to filtered
-          searchBaseCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, safeDifficultyFilters, timeFilter, selectedDeck === 'all' ? null : selectedDeck);
-      }
-      
-      if (!searchBaseCards || searchBaseCards.length === 0) {
-        const scopeName = this.selectedSearchScope.charAt(0).toUpperCase() + this.selectedSearchScope.slice(1);
-        alert(`No words available in ${scopeName} scope. Please try a different scope or adjust your filters.`);
-        return;
-      }
-
-      console.log(`Searching in ${this.selectedSearchScope} scope with ${searchBaseCards.length} cards`);
-
-      let searchResults;
-      
-      if (searchMode === 'exact') {
-        // Exact word match with word boundaries (accent-insensitive)
-        const searchTermLower = searchTerm.toLowerCase();
-        
-        // Create accent-insensitive regex to match whole word boundaries
-        const wordRegex = TextUtils.createAccentInsensitiveRegex(searchTerm);
-        
-        searchResults = searchBaseCards.filter(word => {
-          // Check if search term matches based on selected target
-          let wordMatch = false;
-          let translationMatch = false;
-          
-          if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'word') {
-            wordMatch = wordRegex.test(TextUtils.removeAccents(word.word));
-          }
-          if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'translation') {
-            translationMatch = wordRegex.test(TextUtils.removeAccents(word.translation));
-          }
-          
-          return wordMatch || translationMatch;
-        });
-      } else if (searchMode === 'partial') {
-        // Partial match (accent-insensitive)
-        const searchTermNoAccents = TextUtils.createAccentInsensitiveTerm(searchTerm);
-        
-        searchResults = searchBaseCards.filter(word => {
-          // Check if search term matches based on selected target
-          let wordMatch = false;
-          let translationMatch = false;
-          
-          if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'word') {
-            wordMatch = TextUtils.accentInsensitiveMatch(word.word, searchTerm);
-          }
-          if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'translation') {
-            translationMatch = TextUtils.accentInsensitiveMatch(word.translation, searchTerm);
-          }
-          
-          return wordMatch || translationMatch;
-        });
-      } else {
-        // Fuzzy search using Fuse.js with accent-insensitive matching
-        const searchTermNoAccents = TextUtils.createAccentInsensitiveTerm(searchTerm);
-        
-        // Create accent-free versions of words for fuzzy matching based on selected target
-        let wordsNoAccents;
-        if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'word') {
-          wordsNoAccents = searchBaseCards.map(word => ({
-            ...word,
-            wordNoAccents: TextUtils.removeAccents(word.word)
-          }));
-        } else if (this.selectedSearchTarget === 'translation') {
-          wordsNoAccents = searchBaseCards.map(word => ({
-            ...word,
-            translationNoAccents: TextUtils.removeAccents(word.translation)
-          }));
-        } else {
-          // Both - include both word and translation
-          wordsNoAccents = searchBaseCards.map(word => ({
-            ...word,
-            wordNoAccents: TextUtils.removeAccents(word.word),
-            translationNoAccents: TextUtils.removeAccents(word.translation)
-          }));
-        }
-        
-        const fuseOptions = {
-          keys: this.selectedSearchTarget === 'both' ? ['wordNoAccents', 'translationNoAccents'] : 
-                this.selectedSearchTarget === 'word' ? ['wordNoAccents'] : ['translationNoAccents'],
-          threshold: 0.3, // Lower threshold = more strict matching
-          isCaseSensitive: false,
-          includeScore: true,
-          ignoreLocation: true,
-          tokenize: true,
-          minMatchCharLength: 2
-        };
-
-        const fuse = new Fuse(wordsNoAccents, fuseOptions);
-        const fuseResults = fuse.search(searchTermNoAccents);
-        searchResults = fuseResults.map(result => result.item);
-      }
-
-      if (searchResults.length === 0) {
-        alert(`No words found matching "${searchTerm}"`);
-        // Don't cleanup - let the user close the panel manually
-        return;
-      }
-
-      // Save search term to history
-      this.saveSearchHistory(searchTerm);
-
-      // Clean up and hide search panel
-      this.cameFromSearch = true; // Mark that user came from search
-      this.cleanupSearchPanel();
-
-      // Start study session with search results
-      const searchModeText = searchMode === 'exact' ? 'exact word' : searchMode === 'partial' ? 'partial' : 'fuzzy';
-      console.log(`Found ${searchResults.length} words matching "${searchTerm}" (${searchModeText} match)`);
-      this.onStartStudy(this.selectedLanguagePair, this.container.querySelector('#reverse-direction').checked, searchResults);
+      // Always use performProgressiveSearch to avoid duplicate logic
+      await this.performProgressiveSearch(searchTerm, searchMode, safeDifficultyFilters, timeFilter, selectedDeck);
 
     } catch (error) {
       console.error('Search error:', error);
       alert('Search failed: ' + error.message);
     }
+  }
+
+  showStudyScreen(searchResults, searchTerm = '', searchMode = 'exact') {
+    // Clean up and hide search panel
+    this.cameFromSearch = true; // Mark that user came from search
+    this.cleanupSearchPanel();
+
+    // Start study session with search results
+    const searchModeText = searchMode === 'exact' ? 'exact word' : searchMode === 'partial' ? 'partial' : 'fuzzy';
+    console.log(`Found ${searchResults.length} words matching "${searchTerm}" (${searchModeText} match)`);
+    this.onStartStudy(this.selectedLanguagePair, this.container.querySelector('#reverse-direction').checked, searchResults);
+  }
+
+  async performProgressiveSearch(searchTerm, searchMode, safeDifficultyFilters, timeFilter, selectedDeck) {
+    const scopes = ['filtered', 'deck', 'all'];
+    const currentScopeIndex = scopes.indexOf(this.selectedSearchScope);
+    
+    // First, try searching in the current scope
+    let currentScopeCards;
+    switch (this.selectedSearchScope) {
+      case 'filtered':
+        currentScopeCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, safeDifficultyFilters, timeFilter, selectedDeck === 'all' ? null : selectedDeck);
+        break;
+      case 'deck':
+        currentScopeCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, null, null, selectedDeck === 'all' ? null : selectedDeck);
+        break;
+      case 'all':
+        currentScopeCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, null, null, null);
+        break;
+    }
+    
+    if (currentScopeCards && currentScopeCards.length > 0) {
+      // Perform the search in current scope
+      let searchResults = await this.searchInScope(currentScopeCards, searchTerm, searchMode);
+      
+      if (searchResults.length > 0) {
+        // Found results in current scope
+        this.showStudyScreen(searchResults, searchTerm, searchMode);
+        return;
+      }
+    }
+    
+    // No results in current scope, try progressively larger scopes
+    for (let i = currentScopeIndex + 1; i < scopes.length; i++) {
+      const nextScope = scopes[i];
+      let searchBaseCards;
+      
+      switch (nextScope) {
+        case 'filtered':
+          searchBaseCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, safeDifficultyFilters, timeFilter, selectedDeck === 'all' ? null : selectedDeck);
+          break;
+        case 'deck':
+          searchBaseCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, null, null, selectedDeck === 'all' ? null : selectedDeck);
+          break;
+        case 'all':
+          searchBaseCards = await dataSyncService.getFilteredCards(this.selectedLanguagePair, null, null, null);
+          break;
+      }
+      
+      if (!searchBaseCards || searchBaseCards.length === 0) {
+        continue;
+      }
+      
+      // Perform the search in this larger scope
+      let searchResults = await this.searchInScope(searchBaseCards, searchTerm, searchMode);
+      
+      if (searchResults.length > 0) {
+        // Found results in larger scope
+        const scopeName = nextScope.charAt(0).toUpperCase() + nextScope.slice(1);
+        const message = `No results found in ${this.selectedSearchScope} scope. Found ${searchResults.length} result(s) in ${scopeName} scope. Would you like to see these results?`;
+        const userResponse = confirm(message);
+        
+        if (userResponse) {
+          // User wants to see results from larger scope
+          await this.showSearchResults(searchResults, searchTerm);
+          return;
+        } else {
+          // User declined, don't search in even larger scopes
+          return;
+        }
+      }
+    }
+    
+    // No results found in any scope - ask if user wants to add the word
+    const message = `No results found for "${searchTerm}" in any scope. Would you like to create a new card for this word?`;
+    const userResponse = confirm(message);
+    
+    if (userResponse) {
+      await this.showAddWordModal(searchTerm);
+    }
+  }
+
+  async searchInScope(searchBaseCards, searchTerm, searchMode) {
+    let searchResults;
+    
+    if (searchMode === 'exact') {
+      const searchTermLower = searchTerm.toLowerCase();
+      const wordRegex = TextUtils.createAccentInsensitiveRegex(searchTerm);
+      
+      searchResults = searchBaseCards.filter(word => {
+        let wordMatch = false;
+        let translationMatch = false;
+        
+        if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'word') {
+          wordMatch = wordRegex.test(TextUtils.removeAccents(word.word));
+        }
+        if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'translation') {
+          translationMatch = wordRegex.test(TextUtils.removeAccents(word.translation));
+        }
+        
+        return wordMatch || translationMatch;
+      });
+    } else if (searchMode === 'partial') {
+      const searchTermNoAccents = TextUtils.createAccentInsensitiveTerm(searchTerm);
+      
+      searchResults = searchBaseCards.filter(word => {
+        let wordMatch = false;
+        let translationMatch = false;
+        
+        if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'word') {
+          wordMatch = TextUtils.accentInsensitiveMatch(word.word, searchTerm);
+        }
+        if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'translation') {
+          translationMatch = TextUtils.accentInsensitiveMatch(word.translation, searchTerm);
+        }
+        
+        return wordMatch || translationMatch;
+      });
+    } else {
+      // Fuzzy search
+      const searchTermNoAccents = TextUtils.createAccentInsensitiveTerm(searchTerm);
+      
+      let wordsNoAccents;
+      if (this.selectedSearchTarget === 'both' || this.selectedSearchTarget === 'word') {
+        wordsNoAccents = searchBaseCards.map(word => ({
+          ...word,
+          wordNoAccents: TextUtils.removeAccents(word.word)
+        }));
+      } else if (this.selectedSearchTarget === 'translation') {
+        wordsNoAccents = searchBaseCards.map(word => ({
+          ...word,
+          translationNoAccents: TextUtils.removeAccents(word.translation)
+        }));
+      } else {
+        wordsNoAccents = searchBaseCards.map(word => ({
+          ...word,
+          wordNoAccents: TextUtils.removeAccents(word.word),
+          translationNoAccents: TextUtils.removeAccents(word.translation)
+        }));
+      }
+      
+      const fuseOptions = {
+        keys: this.selectedSearchTarget === 'both' ? ['wordNoAccents', 'translationNoAccents'] : 
+              this.selectedSearchTarget === 'word' ? ['wordNoAccents'] : ['translationNoAccents'],
+        threshold: 0.3,
+        isCaseSensitive: false,
+        includeScore: true,
+        ignoreLocation: true,
+        tokenize: true,
+        minMatchCharLength: 2
+      };
+
+      const fuse = new Fuse(wordsNoAccents, fuseOptions);
+      const fuseResults = fuse.search(searchTermNoAccents);
+      searchResults = fuseResults.map(result => result.item);
+    }
+    
+    return searchResults;
+  }
+
+  async showSearchResults(searchResults, searchTerm) {
+    // Save search term to history
+    this.saveSearchHistory(searchTerm);
+
+    // Use the new showStudyScreen method
+    this.showStudyScreen(searchResults, searchTerm, 'exact');
+  }
+
+  async showAddWordModal(searchTerm) {
+    // Import ManageCardsScreen to reuse the add word functionality
+    const { default: ManageCardsScreen } = await import('./manageCardsScreen.js');
+    
+    // Create and show the manage cards screen with add word modal
+    const manageCardsScreen = new ManageCardsScreen(
+      this.container,
+      () => {
+        // Use unified go-back mechanism
+        if (window.app) {
+          window.app.goBackToWelcome();
+        }
+      }
+    );
+    
+    // Set the selected language pair
+    manageCardsScreen.selectedLanguagePair = this.selectedLanguagePair;
+    
+    // First show the manage cards screen
+    await manageCardsScreen.show();
+    
+    // Pre-populate the word field based on search target
+    const isWordTarget = this.selectedSearchTarget === 'word' || this.selectedSearchTarget === 'both';
+    
+    // Then show the add word modal with pre-populated data
+    manageCardsScreen.showAddWordModal({
+      word: isWordTarget ? searchTerm : '',
+      translation: !isWordTarget ? searchTerm : ''
+    });
   }
 
   showLoadingSpinner() {

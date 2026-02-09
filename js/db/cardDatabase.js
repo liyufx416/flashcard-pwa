@@ -9,6 +9,10 @@ class CardDatabase {
     this.db = null;
   }
 
+  async initIfNeeded() {
+     if (!this.db) await this.init();   
+  }
+
   async init() {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -82,13 +86,15 @@ class CardDatabase {
         type: cardData.type,
         translation: cardData.translation,
         example: cardData.example || '',
+        notes: cardData.notes || [],
         rank: cardData.rank ? parseInt(cardData.rank) : null,
         range_count: cardData.range_count || null,
         frequency: cardData.frequency || null,
         stats: {
           difficulty: cardData.stats?.difficulty || cardData.difficulty || null,
           lastReviewed: cardData.stats?.lastReviewed || cardData.lastReviewed || null,
-          reviewCount: cardData.stats?.reviewCount || cardData.reviewCount || 0
+          reviewCount: cardData.stats?.reviewCount || cardData.reviewCount || 0,
+          lastShown: cardData.stats?.lastShown || null
         }
       };
       
@@ -141,6 +147,20 @@ class CardDatabase {
     return this.saveCard(languagePair, card);
   }
 
+  async updateCardLastShown(languagePair, word, type) {
+    if (!this.db) await this.init();
+    
+    const card = await this.getCard(languagePair, word.toLowerCase(), type);
+    if (!card) {
+      throw new Error(`Card not found: ${languagePair} - ${word} (${type})`);
+    }
+    
+    card.stats = card.stats || {};
+    card.stats.lastShown = new Date().toISOString();
+    
+    return this.saveCard(languagePair, card);
+  }
+
   async mergeCardData(languagePair, jsonCard) {
     if (!this.db) await this.init();
     
@@ -154,12 +174,14 @@ class CardDatabase {
         type: jsonCard.type,
         translation: jsonCard.translation,
         example: jsonCard.example || '',
+        notes: jsonCard.notes || [],
         range_count: jsonCard.range_count || null,
         frequency: jsonCard.frequency || null,
         stats: existingCard.stats || {
           difficulty: null,
           lastReviewed: null,
-          reviewCount: 0
+          reviewCount: 0,
+          lastShown: null
         }
       };
       return this.saveCard(languagePair, mergedCard);
@@ -239,15 +261,21 @@ class CardDatabase {
           // Check if any cards have ranks
           const cardsWithRanks = cards.filter(card => card.rank !== undefined && card.rank !== null);
           
-          if (cardsWithRanks.length === 0) {
-            // No cards have ranks, rank-based deck filtering won't work
+          if (cardsWithRanks.length === 0 && endRank !== Infinity) {
+            // No cards have ranks and deck has finite end rank, rank-based deck filtering won't work
             // Return empty counts for rank-based decks when cards have no ranks
             return { new: 0, easy: 0, medium: 0, hard: 0 };
           }
           
           cards = cards.filter(card => {
             const rank = card.rank;
-            return rank && rank >= startRank && rank <= endRank;
+            if (rank !== undefined && rank !== null) {
+              // Card has rank - check if it's within range
+              return rank >= startRank && rank <= endRank;
+            } else {
+              // Card has no rank - include if deck has no endRank (infinite range)
+              return endRank === Infinity;
+            }
           });
         } else {
           // Card-based deck - filter by explicit card list
@@ -346,7 +374,13 @@ class CardDatabase {
           
           cards = cards.filter(card => {
             const rank = card.rank;
-            return rank && rank >= startRank && rank <= endRank;
+            if (rank !== undefined && rank !== null) {
+              // Card has rank - check if it's within range
+              return rank >= startRank && rank <= endRank;
+            } else {
+              // Card has no rank - include if deck has no endRank (infinite range)
+              return endRank === Infinity;
+            }
           });
         } else {
           // Card-based deck - filter by explicit card list
