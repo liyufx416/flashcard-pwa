@@ -25,6 +25,16 @@ class StudyScreen {
     this.isReviewMode = false; // Toggle between study and review mode
     this.reviewCards = []; // Filtered cards for review mode
     this.currentReviewIndex = 0; // Current index in review mode
+    this.currentRepeatIndex = -1; // Current index that is viewed in repeat mode
+    
+    // Repeat feature properties
+    this.repeatFrequency = 2 * 60 * 1000; // Default 2 minutes in milliseconds
+    this.repeatLevels = ['None', '5 minutes', '2 minutes', '1 minute']; // Repeat frequency levels
+    this.currentRepeatLevel = this.loadRepeatFrequency(); // Load from localStorage
+    
+    // Repeat queues for hard and medium cards
+    this.hardRepeatQueue = []; // Queue for hard cards
+    this.mediumRepeatQueue = []; // Queue for medium cards
   }
 
   checkResponsiveLayout() {
@@ -109,7 +119,9 @@ class StudyScreen {
   }
 
   getCurrentCard() {
-    if (this.isReviewMode) {
+    if (this.currentRepeatIndex !== -1) {
+      return this.cards[this.currentRepeatIndex];
+    } else if (this.isReviewMode) {
       return this.reviewCards[this.currentReviewIndex];
     } else {
       return this.cards[this.currentCardIndex];
@@ -497,6 +509,14 @@ class StudyScreen {
                 `}
               </button>
             </div>
+            <div> <span class="progress-text">Repeat</span>
+              <select id="repeat-dropdown" class="repeat-dropdown" title="Repeat frequency for Hard cards">
+                <option value="0">None</option>
+                <option value="1">5 minutes</option>
+                <option value="2" selected>2 minutes</option>
+                <option value="3">1 minute</option>
+              </select>
+            </div>
             <button id="view-toggle-btn" class="btn-icon" aria-label="Switch to list view" title="Switch to list view">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="8" y1="6" x2="21" y2="6"></line>
@@ -851,6 +871,25 @@ class StudyScreen {
 
     if (backBtn) {
       backBtn.addEventListener('click', () => this.onBack());
+    }
+    
+    // Repeat dropdown event listener (only for card view)
+    const repeatDropdown = this.container.querySelector('#repeat-dropdown');
+    if (repeatDropdown && !this.isListView) {
+      repeatDropdown.addEventListener('change', (e) => {
+        const level = parseInt(e.target.value);
+        this.currentRepeatLevel = level;
+        
+        // Update repeat frequency based on selected level
+        const frequencies = [0, 5 * 60 * 1000, 2 * 60 * 1000, 1 * 60 * 1000]; // None, 5min, 2min, 1min
+        this.repeatFrequency = frequencies[level];
+        
+        // Save to localStorage
+        this.saveRepeatFrequency(level);
+      });
+      
+      // Set initial value from loaded setting
+      repeatDropdown.value = this.currentRepeatLevel;
     }
 
     // Add click listener for app title
@@ -1332,6 +1371,96 @@ class StudyScreen {
     difficultyBtns.forEach(btn => btn.classList.remove('recommendation'));
   }
 
+  // Add card to repeat queue when marked as hard or medium
+  addToRepeatQueue(card, difficulty) {
+    // Remove card from both queues first (to avoid duplicates)
+    this.removeFromRepeatQueue(card);
+    
+    // Add to appropriate queue based on difficulty
+    if (difficulty === 3) { // Hard
+      this.hardRepeatQueue.push({
+        card: card,
+        lastShown: Date.now()
+      });
+    } else if (difficulty === 2) { // Medium
+      this.mediumRepeatQueue.push({
+        card: card,
+        lastShown: Date.now()
+      });
+    }
+  }
+  
+  // Load repeat frequency from localStorage
+  loadRepeatFrequency() {
+    try {
+      const savedLevel = localStorage.getItem('repeatFrequencyLevel');
+      if (savedLevel !== null) {
+        const level = parseInt(savedLevel);
+        // Validate level is between 0 and 3
+        if (level >= 0 && level <= 3) {
+          // Update repeat frequency based on loaded level
+          const frequencies = [0, 5 * 60 * 1000, 2 * 60 * 1000, 1 * 60 * 1000];
+          this.repeatFrequency = frequencies[level];
+          return level;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading repeat frequency from localStorage:', error);
+    }
+    
+    // Default to level 2 (2 minutes) if loading fails
+    return 2;
+  }
+  
+  // Save repeat frequency to localStorage
+  saveRepeatFrequency(level) {
+    try {
+      localStorage.setItem('repeatFrequencyLevel', level.toString());
+    } catch (error) {
+      console.error('Error saving repeat frequency to localStorage:', error);
+    }
+  }
+  
+  // Remove card from both repeat queues
+  removeFromRepeatQueue(card) {
+    this.hardRepeatQueue = this.hardRepeatQueue.filter(item => item.card !== card);
+    this.mediumRepeatQueue = this.mediumRepeatQueue.filter(item => item.card !== card);
+  }
+  
+  // Check if a card is due for repeat based on frequency
+  isCardDueForRepeat(queueItem, frequencyMultiplier = 1) {
+    if (this.currentRepeatLevel === 0) return false; // 'None' level
+    
+    const now = Date.now();
+    const repeatInterval = this.repeatFrequency * frequencyMultiplier;
+    return (now - queueItem.lastShown) >= repeatInterval;
+  }
+  
+  // Get the next card that should be shown (repeat or next in deck)
+  getNextCardToShow() {
+    if (this.currentRepeatLevel === 0) {
+      return null; // No repeat, show next card in deck
+    }
+    
+    // Check hard queue first (highest priority)
+    if (this.hardRepeatQueue.length > 0) {
+      const hardItem = this.hardRepeatQueue[0];
+      if (this.isCardDueForRepeat(hardItem, 1)) {
+        return hardItem.card;
+      }
+    }
+    
+    // Check medium queue (5x longer interval)
+    if (this.mediumRepeatQueue.length > 0) {
+      const mediumItem = this.mediumRepeatQueue[0];
+      if (this.isCardDueForRepeat(mediumItem, 5)) {
+        return mediumItem.card;
+      }
+    }
+    
+    return null; // No cards due for repeat
+  }
+  
   async handleDifficulty(difficulty) {
     // Store the difficulty and last_reviewed timestamp in IndexedDB
     const currentCard = this.getCurrentCard();
@@ -1421,11 +1550,26 @@ class StudyScreen {
     return icons[difficulty] || icons[0];
   }
 
+  getCardInList(index) {
+    if (this.isReviewMode && index < this.reviewCards.length) {
+      return this.reviewCards[index];
+    } else if (index < this.cards.length) {
+      return this.cards[index];
+    }
+    return null;
+  }
+
   setCurrentCard(cardIndex) {
     // Remove current-row class from all rows
     const allRows = this.container.querySelectorAll('.card-row');
     allRows.forEach(row => {
-      row.classList.remove('current-row');
+      if (row.classList.contains('current-row')) {
+        const currentCard = this.getCardInList(parseInt(row.getAttribute('data-index')));
+        if (currentCard && currentCard.stats && (currentCard.stats.difficulty === 2 || currentCard.stats.difficulty === 3)) {
+          this.addToRepeatQueue(currentCard, currentCard.stats.difficulty);
+        }
+        row.classList.remove('current-row');
+      }
     });
     
     const allActionRows = this.container.querySelectorAll('.action-row');
@@ -1438,6 +1582,10 @@ class StudyScreen {
     if (newCurrentRow) {
       newCurrentRow.classList.add('current-row');
       this.currentCardIndex = cardIndex;
+      const currentCard = this.getCardInList(cardIndex);
+      if (currentCard) {
+        this.removeFromRepeatQueue(currentCard)
+      } 
       
       // Update progress text
       this.updateProgressText();
@@ -1687,7 +1835,7 @@ class StudyScreen {
     
     yesBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.animateCardTransition(this.cards.length - 1);
+      this.animateCardTransition(this.cards.length - 1, -1);
       this.disableNavigationButtons(false);
     });
     
@@ -1747,7 +1895,7 @@ class StudyScreen {
         this.currentReviewIndex = 0;
       }
       
-      this.animateCardTransition(0);
+      this.animateCardTransition(0, -1);
       this.disableNavigationButtons(false);
     });
     
@@ -1776,10 +1924,18 @@ class StudyScreen {
   }
 
   // Add this method to your StudyScreen class
-  async animateCardTransition(nextCard = 0) {
+  async animateCardTransition(nextCard = 0, repeatIndex = -1) {
     const flashcard = this.container.querySelector('#flashcard');
     if (!flashcard) return;
     
+    // Get current card and manage repeat queues (works for both card and list views)
+    const currentCard = this.getCurrentCard();
+    
+    // Add current card to repeat queue if it's marked as hard or medium
+    if (currentCard && currentCard.stats && (currentCard.stats.difficulty === 2 || currentCard.stats.difficulty === 3)) {
+      this.addToRepeatQueue(currentCard, currentCard.stats.difficulty);
+    }
+      
     // Remove accent warning when moving to different card
     this.removeAccentWarning(false);
     
@@ -1789,13 +1945,17 @@ class StudyScreen {
     // Wait for flip-out animation to complete
     await new Promise(resolve => setTimeout(resolve, 300));
     
-    // Update current card index based on mode
-    if (this.isReviewMode) {
-      this.currentReviewIndex = nextCard;
-    } else {
-      this.currentCardIndex = nextCard;
+    this.currentRepeatIndex = repeatIndex;
+    if (repeatIndex === -1) {
+      // Update current card index based on mode
+      if (this.isReviewMode) {
+        this.currentReviewIndex = nextCard;
+      } else {
+        this.currentCardIndex = nextCard;
+      }
     }
-    
+    this.removeFromRepeatQueue(this.getCurrentCard());
+        
     // Update progress text
     this.updateProgressText();
     
@@ -1819,29 +1979,39 @@ class StudyScreen {
       if (this.currentReviewIndex === 0) {
         this.showFirstCardPrompt();
       } else {
-        this.animateCardTransition(this.currentReviewIndex-1);
+        this.animateCardTransition(this.currentReviewIndex-1, -1);
       }
     } else {
       if (this.currentCardIndex === 0) {
         this.showFirstCardPrompt();
       } else {
-        this.animateCardTransition(this.currentCardIndex-1);
+        this.animateCardTransition(this.currentCardIndex-1, -1);
       }
     }
   }
 
   handleNext() {
+    // Check for repeat cards first (only in card view)
+    const repeatCard = this.getNextCardToShow();
+    let repeatIndex = -1;
+    if (repeatCard) {
+      // Find index of repeat card in deck
+      repeatIndex = this.cards.findIndex(card => 
+        card.word === repeatCard.word && card.type === repeatCard.type
+      );
+    }
     if (this.isReviewMode) {
-      if (this.currentReviewIndex === this.reviewCards.length - 1) {
+      if (this.currentReviewIndex === this.reviewCards.length - 1 && repeatIndex === -1) {
         this.showLastCardPrompt();
       } else {
-        this.animateCardTransition(this.currentReviewIndex+1);
+        this.animateCardTransition(this.currentReviewIndex+1, repeatIndex);
       }
     } else {
-      if (this.currentCardIndex === this.cards.length - 1) {
+      // Show next card in deck if no repeat card is due
+      if (this.currentCardIndex === this.cards.length - 1 && repeatIndex === -1) {
         this.showLastCardPrompt();
       } else {
-        this.animateCardTransition(this.currentCardIndex+1);
+        this.animateCardTransition(this.currentCardIndex+1, repeatIndex);
       }
     }
   }
