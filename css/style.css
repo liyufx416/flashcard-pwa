@@ -1756,6 +1756,28 @@ p {
   width: 100%;
 }
 
+/* Repeat Dropdown Styles */
+.repeat-dropdown {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  border-color: var(--border-color);
+  background: transparent;
+  color: white;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.repeat-dropdown:hover {
+  border-color: #9ca3af;
+}
+
+.repeat-dropdown:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
